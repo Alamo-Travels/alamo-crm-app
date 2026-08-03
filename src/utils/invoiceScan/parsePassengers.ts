@@ -1,3 +1,4 @@
+import { normalizeName } from '../nameFormat';
 import { OcrPage, ScannedPassenger } from './types';
 
 export interface ParsedPassengers {
@@ -150,7 +151,20 @@ export function parsePassengers(pages: OcrPage[]): ParsedPassengers {
   }
 
   const passengers: ScannedPassenger[] = names.map((entry, index) => ({
-    name: entry.name,
+    // THE one place a scanned name becomes data, and therefore the one place to normalize it.
+    // A Sabre invoice prints every PAX name in caps and OCR reads it back that way, but every
+    // OTHER route into the ledger stores Title Case — the bulk .xlsx importer title-cases with
+    // the API's `normalizeName` (the same rule this mirrors), and the interactive booking form
+    // builds the name from an already-normalized Customer record. Left raw, a scanned booking
+    // sat in the ledger SHOUTING beside its neighbours.
+    //
+    // Normalizing HERE rather than at the display or the save site is what keeps the review
+    // screen, the customer auto-match and the saved `passengerName` in agreement: the field is
+    // read-only in the review UI, so nothing downstream can reintroduce the raw form. It must
+    // stay BELOW the parsing above, which matches on the raw uppercase OCR text
+    // (`CONTINUATION_NAME` is uppercase-only) — normalizing any earlier would break the FOR:
+    // block detection outright.
+    name: normalizeName(entry.name),
     child: entry.child,
     amount: blocks[index]?.amount ?? null,
     ticketNumber: blocks[index]?.ticketNumber ?? null,

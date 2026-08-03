@@ -43,7 +43,7 @@ describe('parsePassengers', () => {
   it('reads a single passenger and its amount', () => {
     const result = parsePassengers(SINGLE);
     expect(result.passengers).toEqual([
-      { name: 'JACOB/SHIBIN THOMAS', child: false, amount: 4275.29, ticketNumber: 'EY7545281549', confidence: 100 },
+      { name: 'Jacob/Shibin Thomas', child: false, amount: 4275.29, ticketNumber: 'EY7545281549', confidence: 100 },
     ]);
     expect(result.netCcBilling).toBe(4275.29);
     expect(result.issues).toEqual([]);
@@ -51,15 +51,25 @@ describe('parsePassengers', () => {
 
   it('reads FOR: continuation lines as further passengers', () => {
     expect(parsePassengers(MULTI).passengers.map((p) => p.name)).toEqual([
-      'PAUL/PHYLIEX JAMES',
-      'BABU/ATHIRA',
-      'PAUL/MICHAELA ROSE',
+      'Paul/Phyliex James',
+      'Babu/Athira',
+      'Paul/Michaela Rose',
     ]);
+  });
+
+  // A Sabre invoice prints every PAX name in caps, and OCR reads it back that way. Storing that
+  // verbatim put SHOUTING names in the ledger beside the Title Case ones every other entry route
+  // produces (the bulk .xlsx importer title-cases via the API's own normalizeName; the interactive
+  // booking form builds the name from an already-normalized Customer record). Normalizing here —
+  // the one place a scanned name becomes data — makes the review screen, the customer match and
+  // the saved booking all agree.
+  it('title-cases the scanned name, which OCR reads back in all caps', () => {
+    expect(parsePassengers(SINGLE).passengers[0].name).toBe('Jacob/Shibin Thomas');
   });
 
   it('strips the CHD suffix but records that the passenger is a child', () => {
     const third = parsePassengers(MULTI).passengers[2];
-    expect(third.name).toBe('PAUL/MICHAELA ROSE');
+    expect(third.name).toBe('Paul/Michaela Rose');
     expect(third.child).toBe(true);
   });
 
@@ -194,7 +204,7 @@ describe('parsePassengers', () => {
         ''),
     ];
     expect(parsePassengers(droppedSlash).passengers.map((p) => p.name)).toEqual([
-      'PAUL/PHYLIEX JAMES',
+      'Paul/Phyliex James',
     ]);
   });
 
@@ -209,8 +219,8 @@ describe('parsePassengers', () => {
         ''),
     ];
     expect(parsePassengers(phantom).passengers.map((p) => p.name)).toEqual([
-      'PAUL/PHYLIEX JAMES',
-      'SOME/OTHERTEXT',
+      'Paul/Phyliex James',
+      'Some/Othertext',
     ]);
   });
 });
@@ -238,9 +248,9 @@ describe('FOR: block against real OCR output (no indentation)', () => {
     ]);
 
     expect(result.passengers.map((p) => p.name)).toEqual([
-      'PAUL/PHYLIEX JAMES',
-      'BABU/ATHIRA',
-      'PAUL/MICHAELA ROSE',
+      'Paul/Phyliex James',
+      'Babu/Athira',
+      'Paul/Michaela Rose',
     ]);
     // The CHD marker still has to survive the change.
     expect(result.passengers[2].child).toBe(true);
@@ -252,7 +262,7 @@ describe('FOR: block against real OCR output (no indentation)', () => {
     const result = parsePassengers([
       pageOf(1, 'FOR: JACOB/SHIBIN THOMAS', '05 NOV 26 - THURSDAY', 'AIR ETIHAD AIRWAYS FLT:14'),
     ]);
-    expect(result.passengers.map((p) => p.name)).toEqual(['JACOB/SHIBIN THOMAS']);
+    expect(result.passengers.map((p) => p.name)).toEqual(['Jacob/Shibin Thomas']);
   });
 });
 
@@ -275,8 +285,8 @@ describe('OCR-damaged ticket label', () => {
     ]);
 
     expect(result.passengers.map((p) => [p.name, p.ticketNumber, p.amount])).toEqual([
-      ['PAUL/PHYLIEX JAMES', 'QR7544570643/44', 1740.99],
-      ['BABU/ATHIRA', 'QR7544570645/46', 1650],
+      ['Paul/Phyliex James', 'QR7544570643/44', 1740.99],
+      ['Babu/Athira', 'QR7544570645/46', 1650],
     ]);
   });
 });
