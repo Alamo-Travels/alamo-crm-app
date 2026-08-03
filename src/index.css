@@ -84,4 +84,19 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Hide the native spinner ("spin buttons" / stepper arrows) on every number input.
+   * Nearly every `type="number"` in this app is a money amount (ticket amount, pending
+   * balance, fare price, line-item cost, tax %), where stepping by 1 is meaningless and
+   * the arrows only steal horizontal space and invite mis-clicks. The inputs stay
+   * `type="number"` so numeric keyboards, `min`, and `step` validation are unaffected. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
