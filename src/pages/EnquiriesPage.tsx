@@ -13,6 +13,7 @@ import { DataTableFacetedFilter } from '@/components/data-table/data-table-facet
 import { DataTablePagination } from '@/components/data-table/data-table-pagination';
 import { COMPACT_CELL_CLASS, COMPACT_HEAD_CLASS } from '@/components/data-table/table-density';
 import { formatDisplayDate } from '@/utils/dateFormat';
+import { formatPhone } from '@/utils/phoneFormat';
 import { formatItinerary, formatPax, formatSegmentDates } from '@/utils/tripFormat';
 
 const STATUS_OPTIONS = ENQUIRY_STATUSES.map((s) => ({ label: s, value: s }));
@@ -101,7 +102,9 @@ export default function EnquiriesPage() {
                   <TableCell className={cn('whitespace-nowrap font-medium', COMPACT_CELL_CLASS)}>
                     {enquiry.enquirer.name}
                   </TableCell>
-                  <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>{enquiry.enquirer.phone}</TableCell>
+                  <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
+                    {formatPhone(enquiry.enquirer.phone)}
+                  </TableCell>
                   <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
                     {formatItinerary(enquiry.trip.segments)}
                   </TableCell>

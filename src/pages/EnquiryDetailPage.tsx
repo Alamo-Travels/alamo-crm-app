@@ -26,6 +26,7 @@ import { AuditHistoryPanel } from '@/components/audit/audit-history-panel';
 import { useAuthStore } from '@/stores/authStore';
 import { canDeleteEnquiries, canEditEnquiries, canSendQuotes, canViewAudit } from '@/utils/permissions';
 import { formatDisplayDate } from '@/utils/dateFormat';
+import { formatPhone } from '@/utils/phoneFormat';
 import { farePriceSummary, formatItinerary, formatPax, formatSegmentDates } from '@/utils/tripFormat';
 
 export default function EnquiryDetailPage() {
@@ -182,7 +183,7 @@ export default function EnquiryDetailPage() {
         <CardContent className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
           <p>
             <span className="font-medium">Enquirer:</span> <span>{enquiry.enquirer.name}</span>
-            {enquiry.enquirer.phone && ` · ${enquiry.enquirer.phone}`}
+            {enquiry.enquirer.phone && ` · ${formatPhone(enquiry.enquirer.phone)}`}
             {enquiry.enquirer.email && ` · ${enquiry.enquirer.email}`}
           </p>
           <p>

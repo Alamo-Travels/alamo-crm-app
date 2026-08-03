@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Eye, Globe, IdCard, Mail, Phone, User } from 'lucide-react';
+import { Eye, Globe, IdCard, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { IconInput } from '@/components/icon-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PhoneInput } from '@/components/phone-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -227,12 +228,10 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="customer-phone">Phone</Label>
-                <IconInput
+                <PhoneInput
                   id="customer-phone"
-                  icon={<Phone />}
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="e.g. +1 555 123 4567 (optional)"
+                  onChange={(phone) => setForm({ ...form, phone })}
                 />
               </div>
               <div className="space-y-2">

@@ -271,6 +271,26 @@ describe('CustomersPage', () => {
     expect(writeText).toHaveBeenLastCalledWith('01Jan1980');
   });
 
+  it('displays a 10-digit phone as (832)-555-1234 and copies the bare digits', async () => {
+    vi.spyOn(customersApi, 'listCustomers').mockResolvedValue({
+      customers: [{ ...BASE_CUSTOMER, phone: '8325551234' }],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+    });
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    renderWithClient(<CustomersPage />);
+
+    expect(await screen.findByText('(832)-555-1234')).toBeInTheDocument();
+
+    // CopyableText's copy button takes its accessible name from the COPIED value (see the
+    // Date of Birth precedent above, which is "Copy 01Jan1980" — the copyValue, not the
+    // displayed "01 Jan 1980") — so the button here is named for the bare digits.
+    await userEvent.click(screen.getByRole('button', { name: 'Copy 8325551234' }));
+    // The clipboard gets the same bare digits, which paste cleanly into Sabre or a dialer.
+    expect(writeText).toHaveBeenLastCalledWith('8325551234');
+  });
+
   it('debounces the search box into a server-side query param', async () => {
     renderWithClient(<CustomersPage />);
     await userEvent.type(screen.getByLabelText('Search customers'), 'Var');
@@ -360,7 +380,9 @@ describe('CustomersPage', () => {
           middleName: 'Middleton',
           lastName: 'Customer',
           dob: '15-May-1990',
-          phone: '555-0199',
+          // The field masks '5550199' (7 digits) to '(555)-019-9' on screen and submits that.
+          // The backend's normalizePhone reduces it to bare digits '5550199' on write.
+          phone: '(555)-019-9',
         })
       );
     });

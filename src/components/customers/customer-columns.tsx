@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { CustomerListItem } from '@/api/customers.api';
 import { CopyableText } from '@/components/data-table/copyable-text';
 import { dobToDigits, dobToIso, formatDisplayDate } from '@/utils/dateFormat';
+import { formatPhone, phoneCopyValue } from '@/utils/phoneFormat';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { CustomerRowActions } from './customer-row-actions';
 
@@ -131,7 +132,10 @@ export function buildCustomerColumns({
       header: () => <span>Phone</span>,
       meta: { label: 'Phone' },
       enableSorting: false,
-      cell: ({ getValue }) => <CopyableText value={getValue<string>()} />,
+      cell: ({ getValue }) => {
+        const phone = getValue<string>();
+        return <CopyableText value={formatPhone(phone)} copyValue={phoneCopyValue(phone)} />;
+      },
     },
     {
       id: 'status',

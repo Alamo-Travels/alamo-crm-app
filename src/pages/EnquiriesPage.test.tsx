@@ -106,7 +106,8 @@ describe('EnquiriesPage', () => {
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(
         expect.objectContaining({
-          enquirer: { name: 'Johny Smith', phone: '555-0100', email: 'johny@example.com' },
+          // PhoneInput masks as-typed; '5550100' (7 digits) masks to '(555)-010-0'.
+          enquirer: { name: 'Johny Smith', phone: '(555)-010-0', email: 'johny@example.com' },
           trip: expect.objectContaining({
             segments: [
               expect.objectContaining({ from: 'IAH', to: 'LAX' }),

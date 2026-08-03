@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CodeSearchField } from '@/components/code-search-field';
 import { DateField } from '@/components/date-field';
 import { MultiCodeSearchField } from '@/components/multi-code-search-field';
+import { PhoneInput } from '@/components/phone-input';
 import { CabinSelectField } from '@/components/enquiries/cabin-select-field';
 import { PassengerCountField, PassengerCounts } from '@/components/enquiries/passenger-count-field';
 import { searchAirlines, searchAirports } from '@/api/flightData.api';
@@ -240,11 +241,11 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
             </div>
             <div className="space-y-1">
               <Label htmlFor="enquiry-phone">Phone</Label>
-              <Input
+              <PhoneInput
                 id="enquiry-phone"
                 aria-label="Phone"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(phone) => setForm({ ...form, phone })}
               />
             </div>
             <div className="space-y-1">
