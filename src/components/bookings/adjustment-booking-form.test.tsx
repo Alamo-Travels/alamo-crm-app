@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { DEFAULT_TIME_ZONE, agencyToday } from '@/utils/agencyTime';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
@@ -6,7 +7,14 @@ import { AdjustmentBookingForm } from './adjustment-booking-form';
 import * as bookingsApi from '@/api/bookings.api';
 import { FUTURE_ARR_DATE, FUTURE_DEP_DATE } from '@/test-utils/dates';
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// The components floor these date inputs on `agencyToday(timeZone)` — the AGENCY-local calendar
+// day (America/Chicago by default; none of these tests mocks branding, so the fallback applies).
+// This constant used to be `new Date().toISOString().slice(0, 10)`, i.e. the UTC day, which agrees
+// with the agency day only for the 18-19 hours a day that UTC and Chicago share a date. Between
+// 00:00 UTC and local midnight — 19:00-24:00 Chicago time — UTC is already tomorrow and all three
+// of these assertions failed, every single night. Deriving the expectation the same way the
+// component does removes the skew by construction rather than re-pinning it to a different clock.
+const TODAY = agencyToday(DEFAULT_TIME_ZONE);
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

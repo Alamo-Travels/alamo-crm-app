@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BookingsTable } from '@/components/bookings/bookings-table';
 import { CreateBookingDialog } from '@/components/bookings/create-booking-dialog';
@@ -10,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { canCreateAdjustments, canCreateBookings, canImportExport, canSendInvoices } from '@/utils/permissions';
 
 export default function BookingsPage() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const canExport = canImportExport(user, 'bookings', 'export');
   const canImport = canImportExport(user, 'bookings', 'import');
@@ -18,6 +21,10 @@ export default function BookingsPage() {
   // different permissions. Show the entry point if the user has either one; hiding it when they
   // have only createAdjustment would remove their only route to recording a reissue.
   const canCreate = canCreateBookings(user) || canCreateAdjustments(user);
+  // Scan Invoices is gated on canCreateBookings specifically (not the broader canCreate above) —
+  // saving a scanned invoice goes through POST /api/bookings (bookings.create), matching the
+  // /bookings/scan route's own beforeLoad gate exactly.
+  const canScan = canCreateBookings(user);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -32,6 +39,17 @@ export default function BookingsPage() {
           <Button type="button" variant="outline" size="sm" onClick={() => setShowVoided(true)}>
             Voided Invoices
           </Button>
+          {canScan && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: '/bookings/scan' })}
+            >
+              <ScanLine />
+              Scan Invoices
+            </Button>
+          )}
           {canSendInvoice && (
             <Button type="button" variant="outline" size="sm" onClick={() => setShowSendInvoice(true)}>
               Send Invoice

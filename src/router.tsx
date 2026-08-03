@@ -2,6 +2,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
   Outlet,
   type RouterHistory,
@@ -23,7 +24,7 @@ import { AuditPage } from './pages/AuditPage';
 import AppShell from './components/AppShell';
 import { Toaster } from './components/ui/sonner';
 import { useAuthStore } from './stores/authStore';
-import { canViewSalesReports, canManageUsers, canViewAudit } from './utils/permissions';
+import { canViewSalesReports, canManageUsers, canViewAudit, canCreateBookings } from './utils/permissions';
 import { restoreSession } from './api/sessionRestore';
 
 const rootRoute = createRootRoute({
@@ -94,6 +95,28 @@ const bookingsRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/bookings',
   component: BookingsPage,
+});
+
+const invoiceScanRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/bookings/scan',
+  // Gated on canCreateBookings, not bookings.import — saving a scanned invoice goes through
+  // POST /api/bookings (bookings.create), and bookings.import is one of the four keys a plain
+  // Admin does not get for free. Requiring it here would lock Admins out of a tool that does
+  // nothing they cannot already do one invoice at a time.
+  beforeLoad: () => {
+    if (!canCreateBookings(useAuthStore.getState().user)) {
+      throw redirect({ to: '/bookings' });
+    }
+  },
+  // Lazy-loaded (unlike every other route component here) because InvoiceScanPage transitively
+  // imports pdfjs-dist, whose browser build references DOMMatrix at module-evaluation time —
+  // jsdom doesn't implement DOMMatrix, so a plain static import would crash on load in every test
+  // that renders the full router without navigating to this route (router.test.tsx, AppShell,
+  // DashboardPage, LoginPage, etc. all render RouterProvider). Deferring the import until this
+  // route actually loads keeps pdfjs-dist out of those test runs entirely, and is a genuine win
+  // for the real app too — pdfjs-dist + tesseract.js are heavy and most sessions never scan a PDF.
+  component: lazyRouteComponent(() => import('./pages/InvoiceScanPage')),
 });
 
 const salesRoute = createRoute({
@@ -174,7 +197,7 @@ const auditRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   indexRoute,
-  authedRoute.addChildren([dashboardRoute, widgetNewRoute, widgetEditRoute, customersRoute, bookingsRoute, salesRoute, enquiriesRoute, enquiryDetailRoute, groupsRoute, groupNewRoute, groupResultsRoute, groupEditRoute, settingsRoute, usersRoute, auditRoute]),
+  authedRoute.addChildren([dashboardRoute, widgetNewRoute, widgetEditRoute, customersRoute, bookingsRoute, invoiceScanRoute, salesRoute, enquiriesRoute, enquiryDetailRoute, groupsRoute, groupNewRoute, groupResultsRoute, groupEditRoute, settingsRoute, usersRoute, auditRoute]),
 ]);
 
 export function createAppRouter(history?: RouterHistory) {

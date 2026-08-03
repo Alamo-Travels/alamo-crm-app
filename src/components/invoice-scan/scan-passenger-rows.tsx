@@ -1,0 +1,281 @@
+import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { User, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { IconInput } from '@/components/icon-input';
+import { Input } from '@/components/ui/input';
+import { RequiredMark } from '@/components/ui/label';
+import { AddEditCustomerDialog } from '@/components/customers/add-edit-customer-dialog';
+import { CustomerSearchResult, searchCustomers } from '@/api/customers.api';
+import type { ScanResolver } from '@/utils/invoiceScan/resolve';
+import { ticketingName } from '@/utils/ticketingName';
+import { useAuthStore } from '@/stores/authStore';
+import { canCreateCustomers } from '@/utils/permissions';
+import { ReviewInvoice } from './reviewInvoice';
+
+interface ScanPassengerRowsProps {
+  invoice: ReviewInvoice;
+  onChange: (next: ReviewInvoice) => void;
+  /**
+   * The PAGE's resolver, shared across the whole review session — deliberately not built here.
+   * This component is keyed on `invoice.id`, so it remounts on every invoice switch; building a
+   * resolver in the effect gave each mount a fresh, empty memo cache and re-issued the same
+   * customer lookups every time the operator moved between invoices. The spec's batch
+   * de-duplication only holds if one cache spans the batch.
+   */
+  resolver: ScanResolver;
+}
+
+/** How a row got its Customer link — cosmetic only (drives the "Matched" vs "Linked" label);
+ *  both are equally valid links. Not persisted on `invoice`, which stores only the id. */
+interface LinkedDisplay {
+  name: string;
+  source: 'auto' | 'manual';
+}
+
+/**
+ * Passenger rows for one scanned invoice: the OCR'd name (fixed — it's what the operator matches
+ * AGAINST, never hand-edited), a customer picker, and an editable amount (OCR misreads amounts
+ * roughly one in six times on real scans, so this is the field most likely to need a fix).
+ *
+ * Every non-Voided passenger must resolve to a real Customer before the invoice can be saved —
+ * stricter than the .xlsx importer, and deliberately with NO grandfathering exemption (unlike
+ * booking-form.tsx's historic-unlinked-row carve-out): every row here is data freshly read off a
+ * scan, not a years-old ledger entry, so there is nothing to grandfather past the gate.
+ *
+ * **MUST be keyed on `invoice.id` by its caller (see `scan-invoice-detail.tsx`'s call site).**
+ * This component owns real per-invoice local state (which row is searching, the resolved matches,
+ * the `linked` display-name cache) — reusing the same instance across an invoice switch (i.e. no
+ * key, or the same key) leaves that state pointing at the WRONG invoice: auto-link stops firing
+ * for every invoice after the first one mounted, and a customer suggestion opened on one invoice
+ * can be clicked after switching and link onto a completely different invoice's passenger. Fix
+ * round 1 found and closed this the hard way (two independent reviewers, empirically proven) —
+ * do not remove the key as "redundant" without re-reading that history.
+ *
+ * Relies on an ANCESTOR `QueryClientProvider` for its own customer search (`useQuery`, mirroring
+ * `CodeSearchField`/`booking-form.tsx`'s picker) and for the nested `AddEditCustomerDialog`'s
+ * `useMutation` — the app-wide one mounted in `main.tsx` in production; every test wraps its own
+ * `render()` the same way every other `QueryClientProvider`-needing consumer's tests do (see
+ * `code-search-field.test.tsx`'s `Harness`, `scan-invoice-detail.test.tsx`'s `Harness`).
+ */
+export default function ScanPassengerRows({ invoice, onChange, resolver }: ScanPassengerRowsProps) {
+  const user = useAuthStore((s) => s.user);
+  const canAddCustomer = canCreateCustomers(user);
+
+  const [linked, setLinked] = useState<Record<number, LinkedDisplay>>({});
+  // Which row's search box is open (null = none), and what it has typed. Only one row searches
+  // at a time.
+  const [searchIndex, setSearchIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [addCustomerIndex, setAddCustomerIndex] = useState(0);
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+
+  // "Latest" refs so the mount-only auto-link effect below can merge into whatever `invoice`/
+  // `onChange` are CURRENT when each lookup resolves, not whatever they were at mount time.
+  // Several lookups race concurrently (one per passenger); without this, a later resolution would
+  // merge into a stale (pre-update) copy of `customerIds` and silently overwrite an earlier
+  // resolution's freshly-set id back to null.
+  const invoiceRef = useRef(invoice);
+  invoiceRef.current = invoice;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Auto-link, once per mount. Passenger names are read-only here, so nothing about this list
+  // ever changes after mount in a way that should re-trigger resolution — running this again on
+  // every amount edit would repeat the same lookups for no benefit and risks clobbering a link
+  // the operator has since changed by hand.
+  useEffect(() => {
+    let cancelled = false;
+    invoice.passengers.forEach((passenger, index) => {
+      if (invoiceRef.current.customerIds[index]) return; // already linked when this mounted
+      resolver.customer(passenger.name).then((match) => {
+        if (cancelled || !match) return;
+        setLinked((prev) => ({ ...prev, [index]: { name: ticketingName(match), source: 'auto' } }));
+        const current = invoiceRef.current;
+        onChangeRef.current({
+          ...current,
+          customerIds: current.customerIds.map((id, i) => (i === index ? match.id : id)),
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The active row's search results, via TanStack Query — mirrors CodeSearchField/booking-form's
+  // picker (caches/dedups across rows and cancels a stale in-flight request itself). No debounce:
+  // this is a manual fallback path used only when auto-link failed to find a unique match, not a
+  // keystroke-heavy primary input.
+  const { data: matches = [] } = useQuery({
+    queryKey: ['customers', 'search', searchQuery],
+    queryFn: () => searchCustomers(searchQuery),
+    enabled: searchIndex !== null && searchQuery.trim().length >= 3,
+  });
+
+  function openSearch(index: number) {
+    setSearchIndex(index);
+    setSearchQuery('');
+  }
+
+  function linkCustomer(index: number, customer: CustomerSearchResult, source: 'auto' | 'manual') {
+    setLinked((prev) => ({ ...prev, [index]: { name: ticketingName(customer), source } }));
+    onChange({ ...invoice, customerIds: invoice.customerIds.map((id, i) => (i === index ? customer.id : id)) });
+    setSearchIndex(null);
+  }
+
+  function unlinkCustomer(index: number) {
+    setLinked((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    onChange({ ...invoice, customerIds: invoice.customerIds.map((id, i) => (i === index ? null : id)) });
+    openSearch(index);
+  }
+
+  function updateAmount(index: number, raw: string) {
+    const amount = raw.trim() === '' ? null : Number(raw);
+    onChange({
+      ...invoice,
+      passengers: invoice.passengers.map((p, i) =>
+        i === index ? { ...p, amount: Number.isNaN(amount) ? p.amount : amount } : p
+      ),
+    });
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-sm font-medium">
+        Passengers
+        <RequiredMark />
+      </p>
+      {invoice.passengers.map((passenger, index) => {
+        const customerId = invoice.customerIds[index];
+        const searching = searchIndex === index;
+        const info = linked[index];
+        const nameLabel = `Passenger ${index + 1} name`;
+
+        return (
+          <div key={index} className="space-y-2 rounded-md border p-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <IconInput icon={<User />} aria-label={nameLabel} value={passenger.name} readOnly />
+              </div>
+              {passenger.child && (
+                <Badge variant="secondary" className="shrink-0 text-muted-foreground">
+                  Child
+                </Badge>
+              )}
+            </div>
+
+            {customerId ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{info?.source === 'auto' ? 'Matched' : 'Linked'}</Badge>
+                <span className="text-sm">{info?.name ?? 'Customer linked'}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Change customer for passenger ${index + 1}`}
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => unlinkCustomer(index)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : searching ? (
+              <div className="relative">
+                <IconInput
+                  icon={<User />}
+                  aria-label={`Search customer for passenger ${index + 1}`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search customer (3+ letters)"
+                />
+                {searchQuery.trim().length >= 3 && (
+                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md border bg-popover text-popover-foreground shadow">
+                    {/* Gated on customers.create — this opens the Add-Customer dialog, so that's
+                        the permission it needs. Searching/picking an EXISTING customer stays
+                        available to everyone below. */}
+                    {canAddCustomer && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start border-b font-medium"
+                        onClick={() => {
+                          setAddCustomerIndex(index);
+                          setAddCustomerOpen(true);
+                        }}
+                      >
+                        + Add new customer
+                      </Button>
+                    )}
+                    {matches.length > 0 && (
+                      <ul role="listbox" className="max-h-48 overflow-y-auto">
+                        {matches.map((m) => (
+                          <li
+                            key={m.id}
+                            role="option"
+                            className="cursor-pointer px-3 py-1"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => linkCustomer(index, m, 'manual')}
+                          >
+                            <div>{ticketingName(m)}</div>
+                            <div className="text-xs text-muted-foreground">{m.dob}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-destructive">Not linked — select a customer</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={`Select customer for passenger ${index + 1}`}
+                  onClick={() => openSearch(index)}
+                >
+                  Select customer
+                </Button>
+              </div>
+            )}
+
+            <div className="relative w-32">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-foreground">
+                $
+              </span>
+              <Input
+                aria-label={`Amount for passenger ${index + 1}`}
+                type="number"
+                className="pl-6"
+                value={passenger.amount ?? ''}
+                onChange={(e) => updateAmount(index, e.target.value)}
+              />
+            </div>
+          </div>
+        );
+      })}
+
+      <AddEditCustomerDialog
+        open={addCustomerOpen}
+        onOpenChange={setAddCustomerOpen}
+        onCreated={(fullName, customerId) => {
+          setLinked((prev) => ({ ...prev, [addCustomerIndex]: { name: fullName, source: 'manual' } }));
+          onChange({
+            ...invoice,
+            customerIds: invoice.customerIds.map((id, i) => (i === addCustomerIndex ? customerId : id)),
+          });
+          setSearchIndex(null);
+        }}
+      />
+    </div>
+  );
+}
