@@ -24,7 +24,7 @@ export function UserHistoryDialog({ user, onOpenChange }: UserHistoryDialogProps
 function UserHistoryBody({ user, onOpenChange }: { user: ManagedUser; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>History — {user.name}</DialogTitle>
         </DialogHeader>

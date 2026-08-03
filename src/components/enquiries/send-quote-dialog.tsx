@@ -88,7 +88,7 @@ export function SendQuoteDialog({ open, onOpenChange, enquiry }: SendQuoteDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent panel dismissible={false} className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Send quote</DialogTitle>
         </DialogHeader>

@@ -148,7 +148,7 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit customer' : 'Add customer'}</DialogTitle>
         </DialogHeader>

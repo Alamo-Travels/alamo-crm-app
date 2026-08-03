@@ -6,11 +6,11 @@ import * as XLSX from 'xlsx';
 import BookingImportWizard from './BookingImportWizard';
 import * as bookingsApi from '../api/bookings.api';
 
-function renderWizard(onClose: () => void = () => {}) {
+function renderWizard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BookingImportWizard onClose={onClose} />
+      <BookingImportWizard />
     </QueryClientProvider>
   );
 }
@@ -122,7 +122,7 @@ describe('BookingImportWizard', () => {
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
     render(
       <QueryClientProvider client={client}>
-        <BookingImportWizard onClose={() => {}} />
+        <BookingImportWizard />
       </QueryClientProvider>
     );
 

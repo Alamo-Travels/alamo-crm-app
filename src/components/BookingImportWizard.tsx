@@ -1,7 +1,6 @@
 import { ChangeEvent, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -97,11 +96,7 @@ function buildRows(headers: string[], rawRows: string[][], mapping: ColumnMappin
   });
 }
 
-interface BookingImportWizardProps {
-  onClose: () => void;
-}
-
-export default function BookingImportWizard({ onClose }: BookingImportWizardProps) {
+export default function BookingImportWizard() {
   const queryClient = useQueryClient();
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
@@ -169,99 +164,89 @@ export default function BookingImportWizard({ onClose }: BookingImportWizardProp
   const okRows = report.filter((r) => r.status === 'imported' || r.status === 'would_import');
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-lg">
-          <h3 className="contents">Import Bookings</h3>
-        </CardTitle>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          Close
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input aria-label="Booking import file" type="file" accept=".xlsx" onChange={handleFileChange} />
+    <div className="space-y-4">
+      <Input aria-label="Booking import file" type="file" accept=".xlsx" onChange={handleFileChange} />
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <Label>Payment status</Label>
-            <Select
-              value={paymentDefault.status}
-              onValueChange={(v) => setPaymentDefault({ ...paymentDefault, status: v as 'paid' | 'pending' })}
-            >
-              <SelectTrigger aria-label="Import payment status" className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label>Payment type</Label>
-            <Select
-              value={paymentDefault.type}
-              onValueChange={(v) => setPaymentDefault({ ...paymentDefault, type: v as 'card' | 'check' | 'cash' })}
-            >
-              <SelectTrigger aria-label="Import payment type" className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="card">Card</SelectItem>
-                <SelectItem value="check">Check</SelectItem>
-                <SelectItem value="cash">Cash</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <Label>Payment status</Label>
+          <Select
+            value={paymentDefault.status}
+            onValueChange={(v) => setPaymentDefault({ ...paymentDefault, status: v as 'paid' | 'pending' })}
+          >
+            <SelectTrigger aria-label="Import payment status" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+        <div className="flex items-center gap-2">
+          <Label>Payment type</Label>
+          <Select
+            value={paymentDefault.type}
+            onValueChange={(v) => setPaymentDefault({ ...paymentDefault, type: v as 'card' | 'check' | 'cash' })}
+          >
+            <SelectTrigger aria-label="Import payment type" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="card">Card</SelectItem>
+              <SelectItem value="check">Check</SelectItem>
+              <SelectItem value="cash">Cash</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-        {headers.length > 0 && (
-          <>
-            <ColumnMapper sourceHeaders={headers} targetFields={TARGET_FIELDS} mapping={mapping} onChange={setMapping} />
-            <Button type="button" onClick={handlePreview} disabled={busy}>
-              {busy && <Spinner />}
-              {busy ? 'Working…' : 'Preview'}
-            </Button>
-          </>
-        )}
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        {report.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            {okRows.length} of {report.length} row(s) {committed ? 'imported' : 'ready to import'}.
-            {issueRows.length > 0 && ` ${issueRows.length} need attention below.`}
-          </p>
-        )}
-
-        {issueRows.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Row</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Reason</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {issueRows.map((r) => (
-                <TableRow key={r.index}>
-                  <TableCell>{r.index + 1}</TableCell>
-                  <TableCell>{issueStatusLabel(r.status)}</TableCell>
-                  <TableCell>{r.reason ?? ''}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {report.length > 0 && !committed && (
-          <Button type="button" onClick={handleCommit} disabled={busy}>
+      {headers.length > 0 && (
+        <>
+          <ColumnMapper sourceHeaders={headers} targetFields={TARGET_FIELDS} mapping={mapping} onChange={setMapping} />
+          <Button type="button" onClick={handlePreview} disabled={busy}>
             {busy && <Spinner />}
-            {busy ? 'Working…' : 'Commit Import'}
+            {busy ? 'Working…' : 'Preview'}
           </Button>
-        )}
-      </CardContent>
-    </Card>
+        </>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {report.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {okRows.length} of {report.length} row(s) {committed ? 'imported' : 'ready to import'}.
+          {issueRows.length > 0 && ` ${issueRows.length} need attention below.`}
+        </p>
+      )}
+
+      {issueRows.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Row</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Reason</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {issueRows.map((r) => (
+              <TableRow key={r.index}>
+                <TableCell>{r.index + 1}</TableCell>
+                <TableCell>{issueStatusLabel(r.status)}</TableCell>
+                <TableCell>{r.reason ?? ''}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {report.length > 0 && !committed && (
+        <Button type="button" onClick={handleCommit} disabled={busy}>
+          {busy && <Spinner />}
+          {busy ? 'Working…' : 'Commit Import'}
+        </Button>
+      )}
+    </div>
   );
 }

@@ -23,7 +23,7 @@ export function EditBookingDialog({ bookingId, onOpenChange, queryKeyPrefix }: E
 
   return (
     <Dialog open={bookingId !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit booking{data ? ` #${data.booking.invoiceNumber}` : ''}</DialogTitle>
         </DialogHeader>

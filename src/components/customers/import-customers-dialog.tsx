@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import CustomerImportWizard from '@/components/CustomerImportWizard';
 
 interface ImportCustomersDialogProps {
@@ -9,9 +9,11 @@ interface ImportCustomersDialogProps {
 export function ImportCustomersDialog({ open, onOpenChange }: ImportCustomersDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogTitle className="sr-only">Import Customers</DialogTitle>
-        <CustomerImportWizard onClose={() => onOpenChange(false)} />
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Customers</DialogTitle>
+        </DialogHeader>
+        <CustomerImportWizard />
       </DialogContent>
     </Dialog>
   );

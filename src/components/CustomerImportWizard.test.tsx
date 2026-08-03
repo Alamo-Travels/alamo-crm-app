@@ -6,11 +6,11 @@ import * as XLSX from 'xlsx';
 import CustomerImportWizard from './CustomerImportWizard';
 import * as customersApi from '../api/customers.api';
 
-function renderWizard(onClose: () => void = () => {}) {
+function renderWizard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <CustomerImportWizard onClose={onClose} />
+      <CustomerImportWizard />
     </QueryClientProvider>
   );
 }
@@ -115,7 +115,7 @@ describe('CustomerImportWizard', () => {
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
     render(
       <QueryClientProvider client={client}>
-        <CustomerImportWizard onClose={() => {}} />
+        <CustomerImportWizard />
       </QueryClientProvider>
     );
 

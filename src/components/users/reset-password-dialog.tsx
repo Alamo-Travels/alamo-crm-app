@@ -41,7 +41,7 @@ function ResetPasswordBody({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent panel dismissible={false} className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>Reset password — {user.name}</DialogTitle>

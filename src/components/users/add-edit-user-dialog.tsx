@@ -31,7 +31,7 @@ export function AddEditUserDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent panel dismissible={false} className="sm:max-w-md">
         {/* key-based remount re-seeds state per record; no reset effect. */}
         {open && <Body key={user?.id ?? 'new'} user={user} actorRole={actorRole} onOpenChange={onOpenChange} />}
       </DialogContent>

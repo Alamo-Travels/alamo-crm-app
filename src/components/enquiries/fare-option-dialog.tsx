@@ -182,7 +182,7 @@ export function FareOptionDialog({ open, onOpenChange, initial, onSave }: FareOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit fare option' : 'Add fare option'}</DialogTitle>
         </DialogHeader>

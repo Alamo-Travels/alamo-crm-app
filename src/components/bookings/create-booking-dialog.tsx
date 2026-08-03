@@ -45,7 +45,7 @@ export function CreateBookingDialog({ open, onOpenChange }: CreateBookingDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {bookingKind === 'New' ? 'Create booking' : bookingKind === 'Reissue' ? 'Record reissue' : 'Record refund'}

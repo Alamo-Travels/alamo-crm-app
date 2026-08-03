@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import BookingImportWizard from '@/components/BookingImportWizard';
 
 interface ImportBookingsDialogProps {
@@ -9,9 +9,11 @@ interface ImportBookingsDialogProps {
 export function ImportBookingsDialog({ open, onOpenChange }: ImportBookingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogTitle className="sr-only">Import Bookings</DialogTitle>
-        <BookingImportWizard onClose={() => onOpenChange(false)} />
+      <DialogContent panel dismissible={false} className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Bookings</DialogTitle>
+        </DialogHeader>
+        <BookingImportWizard />
       </DialogContent>
     </Dialog>
   );

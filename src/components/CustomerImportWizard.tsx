@@ -1,7 +1,6 @@
 import { ChangeEvent, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -53,11 +52,7 @@ function buildRows(headers: string[], rawRows: string[][], mapping: ColumnMappin
   });
 }
 
-interface CustomerImportWizardProps {
-  onClose: () => void;
-}
-
-export default function CustomerImportWizard({ onClose }: CustomerImportWizardProps) {
+export default function CustomerImportWizard() {
   const queryClient = useQueryClient();
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
@@ -129,75 +124,65 @@ export default function CustomerImportWizard({ onClose }: CustomerImportWizardPr
   const okRows = report.filter((r) => r.status === 'imported' || r.status === 'would_import');
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-lg">
-          <h3 className="contents">Import Customers</h3>
-        </CardTitle>
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          Close
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input aria-label="Customer import file" type="file" accept=".xlsx" onChange={handleFileChange} />
+    <div className="space-y-4">
+      <Input aria-label="Customer import file" type="file" accept=".xlsx" onChange={handleFileChange} />
 
-        {headers.length > 0 && (
-          <>
-            <ColumnMapper sourceHeaders={headers} targetFields={TARGET_FIELDS} mapping={mapping} onChange={setMapping} />
-            <Button type="button" onClick={handlePreview} disabled={busy}>
-              {busy && <Spinner />}
-              {busy ? 'Working…' : 'Preview'}
-            </Button>
-          </>
-        )}
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        {report.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            {okRows.length} of {report.length} row(s) {committed ? 'imported' : 'ready to import'}.
-            {issueRows.length > 0 && ` ${issueRows.length} need attention below.`}
-          </p>
-        )}
-
-        {issueRows.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Row</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>Import anyway</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {issueRows.map((r) => (
-                <TableRow key={r.index}>
-                  <TableCell>{r.index + 1}</TableCell>
-                  <TableCell>{r.status}</TableCell>
-                  <TableCell>{r.reason ?? ''}</TableCell>
-                  <TableCell>
-                    {r.status === 'flagged_duplicate' && !committed && (
-                      <Checkbox
-                        aria-label={`Import row ${r.index + 1} anyway`}
-                        checked={forceImportIndices.has(r.index)}
-                        onCheckedChange={() => toggleForceImport(r.index)}
-                      />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-
-        {report.length > 0 && !committed && (
-          <Button type="button" onClick={handleCommit} disabled={busy}>
+      {headers.length > 0 && (
+        <>
+          <ColumnMapper sourceHeaders={headers} targetFields={TARGET_FIELDS} mapping={mapping} onChange={setMapping} />
+          <Button type="button" onClick={handlePreview} disabled={busy}>
             {busy && <Spinner />}
-            {busy ? 'Working…' : 'Commit Import'}
+            {busy ? 'Working…' : 'Preview'}
           </Button>
-        )}
-      </CardContent>
-    </Card>
+        </>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {report.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {okRows.length} of {report.length} row(s) {committed ? 'imported' : 'ready to import'}.
+          {issueRows.length > 0 && ` ${issueRows.length} need attention below.`}
+        </p>
+      )}
+
+      {issueRows.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Row</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Import anyway</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {issueRows.map((r) => (
+              <TableRow key={r.index}>
+                <TableCell>{r.index + 1}</TableCell>
+                <TableCell>{r.status}</TableCell>
+                <TableCell>{r.reason ?? ''}</TableCell>
+                <TableCell>
+                  {r.status === 'flagged_duplicate' && !committed && (
+                    <Checkbox
+                      aria-label={`Import row ${r.index + 1} anyway`}
+                      checked={forceImportIndices.has(r.index)}
+                      onCheckedChange={() => toggleForceImport(r.index)}
+                    />
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {report.length > 0 && !committed && (
+        <Button type="button" onClick={handleCommit} disabled={busy}>
+          {busy && <Spinner />}
+          {busy ? 'Working…' : 'Commit Import'}
+        </Button>
+      )}
+    </div>
   );
 }

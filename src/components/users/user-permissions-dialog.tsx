@@ -104,7 +104,7 @@ function PermissionsBody({ user, onOpenChange }: { user: ManagedUser; onOpenChan
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent panel dismissible={false} className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Permissions — {user.name}</DialogTitle>
           <DialogDescription>
