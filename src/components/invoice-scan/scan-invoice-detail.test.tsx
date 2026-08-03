@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ScanInvoiceDetail from './scan-invoice-detail';
+import ScanInvoiceDetail, { ScanPageImage } from './scan-invoice-detail';
 import { ReviewInvoice } from './reviewInvoice';
 import * as customersApi from '@/api/customers.api';
 
@@ -48,11 +48,11 @@ const INVOICE: ReviewInvoice = {
  */
 function Harness({
   initial,
-  pageImage,
+  pageImages = [],
   onChange,
 }: {
   initial: ReviewInvoice;
-  pageImage?: string;
+  pageImages?: ScanPageImage[];
   onChange?: (next: ReviewInvoice) => void;
 }) {
   const [invoice, setInvoice] = useState(initial);
@@ -63,7 +63,7 @@ function Harness({
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <ScanInvoiceDetail
         invoice={invoice}
-        pageImage={pageImage}
+        pageImages={pageImages}
         resolver={resolver}
         onChange={(next) => {
           setInvoice(next);
@@ -76,8 +76,156 @@ function Harness({
 
 describe('ScanInvoiceDetail', () => {
   it('shows the scanned page image so the handwriting is readable', () => {
-    render(<Harness initial={INVOICE} pageImage="data:image/png;base64,X" />);
+    render(<Harness initial={INVOICE} pageImages={[{ pageNumber: 1, dataUrl: 'data:image/png;base64,X' }]} />);
     expect(screen.getByAltText(/scanned page 1/i)).toBeInTheDocument();
+  });
+
+  // A Sabre invoice routinely runs to two or three pages, and the passenger list, fare breakdown
+  // and total the operator is checking against the form often sit on a LATER page than the header
+  // the parser split on. Only the first page was ever shown, leaving the rest of the invoice
+  // unreadable in review — the images were all present in `pageImages` the whole time.
+  //
+  // Pages are shown ONE at a time and stepped through with the arrows, not stacked in a scroller:
+  // a scanned page at 300 dpi is far taller than the panel, so a stack means scrolling past a
+  // whole page of dead space to reach the next one.
+  it('shows one page at a time, starting at the first', () => {
+    render(
+      <Harness
+        initial={INVOICE}
+        pageImages={[
+          { pageNumber: 1, dataUrl: 'data:image/png;base64,ONE' },
+          { pageNumber: 2, dataUrl: 'data:image/png;base64,TWO' },
+        ]}
+      />
+    );
+
+    expect(screen.getByAltText('Scanned page 1 of 2')).toHaveAttribute('src', 'data:image/png;base64,ONE');
+    expect(screen.queryByAltText('Scanned page 2 of 2')).not.toBeInTheDocument();
+  });
+
+  it('steps forward and back through the pages with the arrows', async () => {
+    render(
+      <Harness
+        initial={INVOICE}
+        pageImages={[
+          { pageNumber: 1, dataUrl: 'data:image/png;base64,ONE' },
+          { pageNumber: 2, dataUrl: 'data:image/png;base64,TWO' },
+        ]}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByAltText('Scanned page 2 of 2')).toHaveAttribute('src', 'data:image/png;base64,TWO');
+    expect(screen.queryByAltText('Scanned page 1 of 2')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(screen.getByAltText('Scanned page 1 of 2')).toHaveAttribute('src', 'data:image/png;base64,ONE');
+  });
+
+  it('disables the arrow at each end so the operator cannot step past the invoice', async () => {
+    render(
+      <Harness
+        initial={INVOICE}
+        pageImages={[
+          { pageNumber: 1, dataUrl: 'data:image/png;base64,ONE' },
+          { pageNumber: 2, dataUrl: 'data:image/png;base64,TWO' },
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /previous page/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /next page/i })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    expect(screen.getByRole('button', { name: /previous page/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled();
+  });
+
+  // Numbering restarts at 1 for EVERY invoice. The operator is correcting one invoice against one
+  // physical sheet, so "Page 1 of 3" is the reading that matches what is in their hand — the
+  // uploaded PDF's own continuous numbering (this invoice starting at page 4) is an artefact of
+  // how the stack happened to be scanned and means nothing to them.
+  it('numbers the pages within the invoice, restarting at 1 rather than continuing the PDF count', async () => {
+    render(
+      <Harness
+        initial={{ ...INVOICE, pageStart: 4, pageEnd: 6 }}
+        pageImages={[
+          { pageNumber: 4, dataUrl: 'data:image/png;base64,ONE' },
+          { pageNumber: 5, dataUrl: 'data:image/png;base64,TWO' },
+          { pageNumber: 6, dataUrl: 'data:image/png;base64,THREE' },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 3 of 3')).toBeInTheDocument();
+    expect(screen.queryByText('Page 4 of 3')).not.toBeInTheDocument();
+  });
+
+  // The count comes from the invoice's own span, NOT from the position of a surviving image in the
+  // array — so an unrenderable page leaves a visible hole in the sequence instead of silently
+  // renumbering the pages around it and making three pages look like two.
+  it('keeps the numbering aligned to the invoice span when a middle page could not be rendered', async () => {
+    render(
+      <Harness
+        initial={{ ...INVOICE, pageStart: 4, pageEnd: 6 }}
+        pageImages={[
+          { pageNumber: 4, dataUrl: 'data:image/png;base64,ONE' },
+          { pageNumber: 6, dataUrl: 'data:image/png;base64,THREE' },
+        ]}
+      />
+    );
+
+    // Stepping forward once lands on page 3 of 3, not a phantom page 2.
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    expect(screen.getByText('Page 3 of 3')).toBeInTheDocument();
+    expect(screen.queryByText('Page 2 of 3')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled();
+  });
+
+  it('falls back to a message when no page image could be rendered', () => {
+    render(<Harness initial={INVOICE} pageImages={[]} />);
+    expect(screen.getByText(/no page image available/i)).toBeInTheDocument();
+  });
+
+  // This component is NOT keyed on the invoice by its caller, so it survives an invoice switch —
+  // the same hazard `ScanPassengerRows` documents at length. Left to persist, the page index would
+  // point into the PREVIOUS invoice's page list: switching from page 3 of a 3-page invoice to a
+  // 1-page one would render a blank panel with no way back.
+  it('returns to the first page when a different invoice is selected', async () => {
+    function SwitchHarness() {
+      const [invoice, setInvoice] = useState(INVOICE);
+      const [resolver] = useState(() => buildResolver());
+      const pages =
+        invoice.id === 'scan-0'
+          ? [
+              { pageNumber: 1, dataUrl: 'data:image/png;base64,ONE' },
+              { pageNumber: 2, dataUrl: 'data:image/png;base64,TWO' },
+            ]
+          : [{ pageNumber: 9, dataUrl: 'data:image/png;base64,OTHER' }];
+      return (
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <button type="button" onClick={() => setInvoice({ ...INVOICE, id: 'scan-1', pageStart: 9, pageEnd: 9 })}>
+            Switch invoice
+          </button>
+          <ScanInvoiceDetail invoice={invoice} pageImages={pages} resolver={resolver} onChange={setInvoice} />
+        </QueryClientProvider>
+      );
+    }
+    render(<SwitchHarness />);
+
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /switch invoice/i }));
+
+    expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
+    expect(screen.getByAltText('Scanned page 1 of 1')).toHaveAttribute('src', 'data:image/png;base64,OTHER');
   });
 
   it('offers the alternative arrival date when the two candidates differ', () => {
@@ -306,7 +454,7 @@ function MultiInvoiceHarness() {
       </button>
       <ScanInvoiceDetail
         invoice={selected}
-        pageImage={undefined}
+        pageImages={[]}
         resolver={resolver}
         onChange={(next) => setInvoices((prev) => prev.map((inv) => (inv.id === next.id ? next : inv)))}
       />

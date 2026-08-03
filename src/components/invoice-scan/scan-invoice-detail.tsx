@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Hash, Plane, PlaneLanding, PlaneTakeoff, Ticket } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Hash, Plane, PlaneLanding, PlaneTakeoff, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,9 +25,105 @@ import { ReviewInvoice } from './reviewInvoice';
 import ScanAdjustmentParent from './scan-adjustment-parent';
 import ScanPassengerRows from './scan-passenger-rows';
 
+/** One rendered page of the uploaded PDF, carrying its own 1-based page number. */
+export interface ScanPageImage {
+  pageNumber: number;
+  dataUrl: string;
+}
+
+/**
+ * One page of the invoice at a time, stepped through with the arrows.
+ *
+ * Deliberately a pager rather than a scrolling stack: a page rendered at 300 dpi is several times
+ * taller than the panel, so stacking them means scrolling through a whole page of dead space to
+ * reach the next one, with no indication of how many are left.
+ *
+ * Owns the only piece of local state in this file's subtree, which is why it is a separate
+ * component — its caller remounts it per invoice via `key`, and that remount is what resets the
+ * page index (see the call site).
+ */
+function ScanPageViewer({
+  pages,
+  pageStart,
+  pageCount,
+}: {
+  pages: ScanPageImage[];
+  pageStart: number;
+  pageCount: number;
+}) {
+  const [index, setIndex] = useState(0);
+
+  if (pages.length === 0) {
+    return (
+      <div className="flex items-start justify-center rounded-md border bg-muted/30 p-2">
+        <p className="py-8 text-center text-sm text-muted-foreground">No page image available.</p>
+      </div>
+    );
+  }
+
+  const page = pages[index];
+  // Numbered WITHIN this invoice, restarting at 1 for each one — the operator is correcting a
+  // single invoice against a single physical sheet, and the uploaded PDF's continuous count (this
+  // invoice happening to start at page 14 of the stack) tells them nothing. Derived from the
+  // invoice's own span rather than the position in `pages`, so an unrenderable page leaves a
+  // VISIBLE gap in the sequence (1 then 3 of 3) instead of silently renumbering the survivors and
+  // making a lost page look like a page that was never there.
+  const numberInInvoice = page.pageNumber - pageStart + 1;
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/30 p-2">
+      {/* Rendered even for a single-page invoice, both arrows disabled: the label is the
+          operator's confirmation that there is nothing else to look at. */}
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Previous page"
+          className="h-8 w-8 shrink-0"
+          disabled={index === 0}
+          onClick={() => setIndex((i) => i - 1)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Page {numberInInvoice} of {pageCount}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Next page"
+          className="h-8 w-8 shrink-0"
+          disabled={index === pages.length - 1}
+          onClick={() => setIndex((i) => i + 1)}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+      <img
+        src={page.dataUrl}
+        alt={`Scanned page ${numberInInvoice} of ${pageCount}`}
+        className="max-h-[70vh] w-full object-contain"
+      />
+    </div>
+  );
+}
+
 interface ScanInvoiceDetailProps {
   invoice: ReviewInvoice;
-  pageImage: string | undefined;
+  /**
+   * EVERY page this invoice spans (`pageStart`…`pageEnd`), in order — not just the first.
+   *
+   * A Sabre invoice routinely runs to two or three pages, and the passenger list, fare breakdown
+   * and totals the operator is checking against the form frequently sit on a LATER page than the
+   * header the parser split on; showing only page one left the rest of the invoice unreadable
+   * during review. A page that failed to render is simply absent from this array (it is never a
+   * placeholder), which is why each entry carries its OWN `pageNumber` rather than the caption
+   * being derived from the array index — with page 4 of 4–6 unrenderable, the remaining images
+   * must still be labelled 5 and 6.
+   */
+  pageImages: ScanPageImage[];
   onChange: (next: ReviewInvoice) => void;
   /** Passed straight through to `ScanPassengerRows` — see its prop doc for why the resolver is
    *  owned by the page and not built per mount. */
@@ -43,7 +139,7 @@ interface ScanInvoiceDetailProps {
  * mounted in `main.tsx` in production; each test wraps its own `render()` the same way every
  * other `CodeSearchField` consumer's tests do — see `code-search-field.test.tsx`'s `Harness`).
  */
-export default function ScanInvoiceDetail({ invoice, pageImage, onChange, resolver }: ScanInvoiceDetailProps) {
+export default function ScanInvoiceDetail({ invoice, pageImages, onChange, resolver }: ScanInvoiceDetailProps) {
   const user = useAuthStore((s) => s.user);
   const allowAdjustments = canCreateAdjustments(user);
 
@@ -53,6 +149,11 @@ export default function ScanInvoiceDetail({ invoice, pageImage, onChange, resolv
   const activeArrDate = invoice.arrDateChoice === 'return' ? invoice.arrDateReturn : invoice.arrDateFinal;
   const otherArrDate = invoice.arrDateChoice === 'return' ? invoice.arrDateFinal : invoice.arrDateReturn;
   const showArrAlternative = Boolean(invoice.arrDateReturn) && Boolean(invoice.arrDateFinal) && invoice.arrDateReturn !== invoice.arrDateFinal;
+
+  /** How many pages this invoice SPANS — not how many rendered. A page that failed to render is
+   *  missing from `pageImages` but is still one of the invoice's pages, and saying "of 2" when the
+   *  operator is looking at pages 1 and 3 of 3 would hide that something was lost. */
+  const pageCount = invoice.pageEnd - invoice.pageStart + 1;
 
   /**
    * The id of the invoice a void confirmation is currently open for, or `null`.
@@ -139,17 +240,11 @@ export default function ScanInvoiceDetail({ invoice, pageImage, onChange, resolv
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="flex items-start justify-center rounded-md border bg-muted/30 p-2">
-        {pageImage ? (
-          <img
-            src={pageImage}
-            alt={`Scanned page ${invoice.pageStart}`}
-            className="max-h-[70vh] w-full object-contain"
-          />
-        ) : (
-          <p className="py-8 text-sm text-muted-foreground">No page image available.</p>
-        )}
-      </div>
+      {/* Keyed on the invoice so the page index re-seeds to the first page on every switch — this
+          component is NOT keyed by its caller, so a reset effect would be the alternative, and
+          this codebase prefers a key-based remount (see `ScanPassengerRows`' own key warning and
+          the booking-edit notes in CLAUDE.md). */}
+      <ScanPageViewer key={invoice.id} pages={pageImages} pageStart={invoice.pageStart} pageCount={pageCount} />
 
       <div className="space-y-3">
         <div className="space-y-1">

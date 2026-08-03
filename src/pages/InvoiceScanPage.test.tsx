@@ -161,6 +161,55 @@ describe('InvoiceScanPage', () => {
     expect(screen.getByText(/1 invoice found/i)).toBeInTheDocument();
   });
 
+  // `INVOICE` spans pages 1-2. The review panel used to be handed only
+  // `pageImages.get(selected.pageStart)`, so page 2 was rendered at 300 dpi, held in memory, and
+  // never shown - leaving whatever sat on it (commonly the fare breakdown and total) unreadable.
+  it('makes every page the selected invoice spans reachable, not just its first', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({
+      invoices: [INVOICE],
+      pageImages: new Map([
+        [1, 'data:image/png;base64,ONE'],
+        [2, 'data:image/png;base64,TWO'],
+      ]),
+    });
+    renderPage();
+
+    await userEvent.upload(
+      screen.getByLabelText(/scanned invoices/i),
+      new File(['x'], 'stack.pdf', { type: 'application/pdf' })
+    );
+
+    expect(await screen.findByAltText('Scanned page 1 of 2')).toHaveAttribute('src', 'data:image/png;base64,ONE');
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByAltText('Scanned page 2 of 2')).toHaveAttribute('src', 'data:image/png;base64,TWO');
+  });
+
+  // A page that failed to render is absent from `pageImages` entirely (scanPdf records it as an
+  // operator-visible issue instead), so the surviving pages must still show - and must still be
+  // labelled with their OWN page numbers, not renumbered by position.
+  it('skips a page that could not be rendered without losing the pages around it', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({
+      invoices: [{ ...INVOICE, pageStart: 4, pageEnd: 6 }],
+      pageImages: new Map([
+        [4, 'data:image/png;base64,FOUR'],
+        [6, 'data:image/png;base64,SIX'],
+      ]),
+    });
+    renderPage();
+
+    await userEvent.upload(
+      screen.getByLabelText(/scanned invoices/i),
+      new File(['x'], 'stack.pdf', { type: 'application/pdf' })
+    );
+
+    // Numbered within the invoice (pages 4-6 of the PDF read as 1-3 of this invoice), with the
+    // gap left visible rather than the survivors renumbered 1 and 2.
+    expect(await screen.findByAltText('Scanned page 1 of 3')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByAltText('Scanned page 3 of 3')).toBeInTheDocument();
+    expect(screen.queryByAltText('Scanned page 2 of 3')).not.toBeInTheDocument();
+  });
+
   it('marks an invoice with issues as needing attention', async () => {
     vi.mocked(scan.scanPdf).mockResolvedValue({
       invoices: [{ ...INVOICE, issues: ['No PNR found'] }],

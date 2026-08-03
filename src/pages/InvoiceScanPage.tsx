@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import ScanInvoiceDetail from '@/components/invoice-scan/scan-invoice-detail';
+import ScanInvoiceDetail, { ScanPageImage } from '@/components/invoice-scan/scan-invoice-detail';
 import ScanInvoiceList from '@/components/invoice-scan/scan-invoice-list';
 import { ReviewInvoice, ReviewStatus, statusFor } from '@/components/invoice-scan/reviewInvoice';
 import {
@@ -383,6 +383,25 @@ export default function InvoiceScanPage() {
 
   const selected = invoices.find((invoice) => invoice.id === selectedId) ?? null;
 
+  /**
+   * Every rendered page the selected invoice spans, in order — an invoice is routinely more than
+   * one page, and the review panel used to be handed `pageImages.get(selected.pageStart)` alone,
+   * so pages 2+ of a multi-page invoice were rendered, held in memory, and never shown.
+   *
+   * A page that failed to render is absent from the map (see `scanPdf`, which records it as an
+   * operator-visible issue instead), so it is skipped here rather than emitted as a hole — which
+   * is exactly why each entry carries its own `pageNumber` for the caption.
+   */
+  const selectedPageImages = useMemo<ScanPageImage[]>(() => {
+    if (!selected) return [];
+    const pages: ScanPageImage[] = [];
+    for (let n = selected.pageStart; n <= selected.pageEnd; n++) {
+      const dataUrl = pageImages.get(n);
+      if (dataUrl) pages.push({ pageNumber: n, dataUrl });
+    }
+    return pages;
+  }, [selected, pageImages]);
+
   /** Writes one resolved field onto ONE invoice (by id, never "whichever is selected NOW") and
    * recomputes its status — status must be recomputed here because a resolved `airlineCode` is
    * exactly what can flip a New invoice from `'attention'` to `'ready'` (see `statusFor`). Guards
@@ -553,7 +572,7 @@ export default function InvoiceScanPage() {
                 <>
                   <ScanInvoiceDetail
                     invoice={selected}
-                    pageImage={pageImages.get(selected.pageStart)}
+                    pageImages={selectedPageImages}
                     onChange={handleDetailChange}
                     resolver={scanResolver}
                   />
