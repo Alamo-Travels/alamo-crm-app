@@ -450,6 +450,7 @@ describe('BookingsPage', () => {
     // The Passengers section is hidden too — a placeholder VOID passenger is submitted instead.
     expect(screen.queryByLabelText('Passenger name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Amount')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Total invoice amount')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Invoice number'), 'VOID-UI-1');
     await userEvent.click(screen.getByRole('button', { name: 'Create booking' }));

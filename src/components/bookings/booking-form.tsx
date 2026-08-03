@@ -18,6 +18,7 @@ import { IconInput } from '@/components/icon-input';
 import { searchAirports, searchAirlines } from '@/api/flightData.api';
 import { useListNavigation } from '@/hooks/useListNavigation';
 import { duplicateInvoice, errorMessage } from '@/utils/apiError';
+import { formatUsd, splitAmount } from '@/utils/amountSplit';
 import { formatDisplayDate } from '@/utils/dateFormat';
 import { ticketingName } from '@/utils/ticketingName';
 import { cn } from '@/lib/utils';
@@ -98,6 +99,14 @@ function passengerRowsFrom(initial?: BookingDetail): PassengerRow[] {
   }));
 }
 
+/** The invoice total shown when an existing booking is opened: the sum of its stored passenger
+ * amounts, in cents so the arithmetic can't drift. Blank for a new booking. */
+function totalAmountFrom(initial?: BookingDetail): string {
+  if (!initial || initial.passengers.length === 0) return '';
+  const cents = initial.passengers.reduce((sum, p) => sum + Math.round(p.amount * 100), 0);
+  return String(cents / 100);
+}
+
 /** The single payment+remark applied to every passenger when the "same for all" checkbox is on. */
 interface SharedPayment {
   paymentStatus: 'paid' | 'pending';
@@ -175,6 +184,14 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
   // initializer (never a reset effect — the dialog remounts per record, see the note below).
   const [shareAll, setShareAll] = useState(() => isShareable(initial));
   const [shared, setShared] = useState<SharedPayment>(() => sharedStateFrom(initial));
+  // Invoice total — an AUTHORING CONVENIENCE ONLY. It is never submitted and never stored; a
+  // Booking has no total field and an invoice's total is the sum of its passengers' amounts, both
+  // before and after this feature. Typing here divides the figure across the rows.
+  const [totalAmount, setTotalAmount] = useState(() => totalAmountFrom(initial));
+  // Whether the user has actually TYPED a total this session. A total merely seeded from a stored
+  // invoice must not drive anything (see the add/remove handlers) — otherwise adding a passenger
+  // to a saved invoice would silently rewrite its other passengers' stored amounts.
+  const [totalTouched, setTotalTouched] = useState(false);
   // Which passenger row's autocomplete is active, and what it has typed.
   const [search, setSearch] = useState<{ index: number; query: string } | null>(null);
   // Which passenger row an inline "add new customer" should fill on success.
@@ -205,6 +222,17 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
     if (p.id && grandfathered.has(p.id) && p.name.trim().length > 0) return false;
     return true;
   }
+
+  // Derived during render, deliberately NOT state — there is nothing to keep in sync and no effect
+  // involved. Compared in integer cents so ordinary decimal amounts can't produce a phantom
+  // mismatch. A blank or unparseable total means "no total entered", not zero.
+  const totalCents = totalAmount.trim() === '' ? null : Math.round(Number(totalAmount) * 100);
+  const rowCents = passengers.reduce((sum, p) => sum + Math.round((Number(p.amount) || 0) * 100), 0);
+  const totalMismatch =
+    totalCents !== null && Number.isFinite(totalCents) && totalCents !== rowCents
+      ? { rows: formatUsd(rowCents / 100), total: formatUsd(totalCents / 100) }
+      : null;
+
   // Departure/Arrival dates are NOT floored at today — old invoices are routinely entered after the
   // flight has already happened, so a past trip date is legitimate on create just as it is on edit.
   // The one bound kept is that Arrival can't precede its own Departure, and only on create (a
@@ -244,6 +272,52 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
 
   function updatePassenger(index: number, patch: Partial<PassengerRow>) {
     setPassengers((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  /** Apply a computed per-row split, carrying a FULL-ticket pending balance forward onto the new
+   * `amount` — a passenger who owed their whole ticket keeps owing their whole ticket after a
+   * re-split (e.g. removing a passenger raises the survivors' amounts). A PARTIAL balance (a real,
+   * hand-entered deposit already paid) is a genuine figure and is left completely untouched — this
+   * function only ever writes `pendingAmount` when it was already tracking `amount` exactly.
+   * Comparison runs in integer cents, never floats, matching the rest of this feature. Pure — no
+   * closure over reactive state — so both call sites below can share it safely. */
+  function withSplitAmounts(rows: PassengerRow[], split: string[]): PassengerRow[] {
+    return rows.map((row, i) => {
+      const amount = split[i] ?? row.amount;
+      const owedFullTicket =
+        row.paymentStatus === 'pending' &&
+        Math.round((Number(row.pendingAmount) || 0) * 100) === Math.round((Number(row.amount) || 0) * 100);
+      return { ...row, amount, ...(owedFullTicket ? { pendingAmount: amount } : {}) };
+    });
+  }
+
+  /** Typing in the total re-divides it across every row, live. Splitting inside the updater (rather
+   * than closing over `passengers`) keeps it correct if a row was added in the same tick. */
+  function handleTotalChange(value: string) {
+    setTotalAmount(value);
+    setTotalTouched(true);
+    // Emptying the total empties what it filled in. Leaving the last split behind would strand
+    // amounts the user can no longer see a total for, and they'd read as hand-entered figures.
+    // Routed through withSplitAmounts so a full-ticket pending balance clears with its ticket
+    // while a real deposit stays put — the same carry-forward rule a re-split follows.
+    if (value.trim() === '') {
+      setPassengers((rows) => withSplitAmounts(rows, rows.map(() => '')));
+      return;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    setPassengers((rows) => withSplitAmounts(rows, splitAmount(parsed, rows.length)));
+  }
+
+  /** Re-divide the entered total across `rows`.
+   *
+   * A no-op unless the user has actually TYPED a total. On edit the field is seeded from the
+   * invoice's stored amounts, and re-splitting off a seeded value would silently rewrite saved
+   * passenger amounts the moment someone added a row — retyping the total is the opt-in. */
+  function applyTotalSplit(rows: PassengerRow[]): PassengerRow[] {
+    const parsed = Number(totalAmount);
+    if (!totalTouched || totalAmount.trim() === '' || !Number.isFinite(parsed)) return rows;
+    return withSplitAmounts(rows, splitAmount(parsed, rows.length));
   }
 
   function selectMatch(index: number, name: string, customerId: string) {
@@ -434,6 +508,38 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
             </Label>
           </div>
         </div>
+        {/* Invoice total: divides across the passenger rows as you type, leftover cents to
+            passenger 1. Each row stays individually editable — editing one by hand does NOT move
+            this value, it raises the mismatch note instead. Optional: leaving it blank splits
+            nothing and every row behaves as it did before this existed. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="booking-total-amount" className="text-xs font-normal text-muted-foreground">
+              Total invoice amount
+            </Label>
+            <div className="relative w-40">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-foreground">
+                $
+              </span>
+              <Input
+                id="booking-total-amount"
+                aria-label="Total invoice amount"
+                type="number"
+                min="0"
+                className="h-9 pl-6"
+                value={totalAmount}
+                onChange={(e) => handleTotalChange(e.target.value)}
+                placeholder="Splits across PAXs"
+              />
+            </div>
+          </div>
+          {totalMismatch && (
+            <p className="pb-2 text-sm text-amber-600 dark:text-amber-500">
+              Passenger amounts add up to {totalMismatch.rows}, which doesn&apos;t match the total of{' '}
+              {totalMismatch.total}.
+            </p>
+          )}
+        </div>
         {passengers.map((passenger, index) => {
           const nameLabel = index === 0 ? 'Passenger name' : `Passenger name ${index + 1}`;
           const searching = search?.index === index;
@@ -573,6 +679,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
               <Input
                 aria-label={index === 0 ? 'Amount' : `Amount ${index + 1}`}
                 type="number"
+                min="0"
                 className="pl-6"
                 value={passenger.amount}
                 onChange={(e) => updatePassenger(index, { amount: e.target.value })}
@@ -587,7 +694,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
               aria-label={`Remove passenger ${index + 1}`}
               disabled={passengers.length === 1}
               className="h-9 w-9 shrink-0 rounded-md bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700 disabled:bg-muted disabled:text-muted-foreground dark:bg-red-950 dark:text-red-300"
-              onClick={() => setPassengers((rows) => rows.filter((_, i) => i !== index))}
+              onClick={() => setPassengers((rows) => applyTotalSplit(rows.filter((_, i) => i !== index)))}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -643,6 +750,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
                     id={`passenger-pending-amount-${index}`}
                     aria-label={pendingAmountLabel}
                     type="number"
+                    min="0"
                     className="h-9 pl-6"
                     value={passenger.pendingAmount}
                     onChange={(e) => updatePassenger(index, { pendingAmount: e.target.value })}
@@ -679,7 +787,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
               // Reset the submit-attempt flag so a fresh blank row doesn't inherit the red
               // "Select a customer" alert from a previous failed submit before it's even been used.
               setLinkAttempted(false);
-              setPassengers((rows) => [...rows, { ...EMPTY_PASSENGER }]);
+              setPassengers((rows) => applyTotalSplit([...rows, { ...EMPTY_PASSENGER }]));
             }}
           >
             Add passenger
