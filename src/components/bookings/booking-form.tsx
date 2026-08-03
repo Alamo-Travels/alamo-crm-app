@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useMemo, useRef, useState } from 'react';
 import { Hash, Plane, PlaneLanding, PlaneTakeoff, StickyNote, Ticket, User, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -14,8 +14,12 @@ import { searchCustomers } from '@/api/customers.api';
 import { AddEditCustomerDialog } from '@/components/customers/add-edit-customer-dialog';
 import { CodeSearchField } from '@/components/code-search-field';
 import { DateField } from '@/components/date-field';
+import { DraftRestoreBar } from '@/components/draft-restore-bar';
+import { LeaveFormDialog } from '@/components/leave-form-dialog';
 import { IconInput } from '@/components/icon-input';
 import { searchAirports, searchAirlines } from '@/api/flightData.api';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { isBookingDraftEmpty } from './isBookingDraftEmpty';
 import { useListNavigation } from '@/hooks/useListNavigation';
 import { duplicateInvoice, errorMessage } from '@/utils/apiError';
 import { formatUsd, splitAmount } from '@/utils/amountSplit';
@@ -156,6 +160,30 @@ function isShareable(initial?: BookingDetail): boolean {
   );
 }
 
+/** The slice of this form's state worth keeping. Excludes transient UI state (the autocomplete
+ * query, the nested add-customer dialog) and in-flight request state (the duplicate-invoice
+ * warning, the link-gate flag) — restoring those would resurrect a dropdown, not work.
+ *
+ * `totalAmount`/`totalTouched` ARE drafted (added in review — the original cut of this feature
+ * predates the "Total invoice amount" field and silently dropped both): without `totalTouched`,
+ * restoring a draft whose passenger amounts were split off a typed total would re-seed the form in
+ * a state where adding/removing a passenger no longer re-splits, silently changing behaviour from
+ * the session the user left. */
+export interface BookingDraftState {
+  form: typeof emptyForm;
+  passengers: PassengerRow[];
+  shareAll: boolean;
+  shared: SharedPayment;
+  totalAmount: string;
+  totalTouched: boolean;
+}
+
+// `isBookingDraftEmpty` used to live here inline. It moved to `./isBookingDraftEmpty.ts` (a
+// non-component file) purely so it can be `export`ed for direct unit testing without this file —
+// whose sole intended export is `BookingForm` — picking up a react-refresh lint warning for
+// exporting a non-component value alongside it. See that file for the full docstring, including
+// the M3 regression this predicate's `seededBookingDate` parameter exists to avoid.
+
 interface BookingFormProps {
   /** Absent = create a new booking. Present = edit this one. */
   initial?: BookingDetail;
@@ -178,6 +206,13 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
   // without any effect. (This exact class of bug was fixed once already in this codebase — see
   // send-quote-dialog.tsx's `wasOpen`-gated reset effect — so don't reintroduce it here.)
   const [form, setForm] = useState(() => formStateFrom(initial));
+  // Captured ONCE at mount — the exact bookingDate value this form actually started with, not a
+  // live "today". `useRef`'s initial-value argument is only ever used on the render that creates
+  // the ref, so this freezes at whatever `form.bookingDate` was on the very first render (module's
+  // `emptyForm.bookingDate` on create, or the stored value on edit) and never changes again for the
+  // lifetime of this mount — which is exactly what the draft-emptiness predicate needs to compare
+  // against (see `isBookingDraftEmpty`'s docstring for the regression this avoids).
+  const seededBookingDateRef = useRef(form.bookingDate);
   const [passengers, setPassengers] = useState<PassengerRow[]>(() => passengerRowsFrom(initial));
   // "Same payment & remark for all passengers." On (default for a new or all-identical booking) =>
   // one shared payment/remark block; off => per-passenger fields. Seeded by isShareable in a lazy
@@ -223,6 +258,44 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
     return true;
   }
 
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const draftState = useMemo<BookingDraftState>(
+    () => ({ form, passengers, shareAll, shared, totalAmount, totalTouched }),
+    [form, passengers, shareAll, shared, totalAmount, totalTouched]
+  );
+  // Create-only: an abandoned EDIT loses nothing (the record on file is intact), while restoring a
+  // stale edit could overwrite a colleague's change with no version field to detect it.
+  //
+  // The inline closure over `seededBookingDateRef.current` is safe despite getting a new identity
+  // every render — `useFormDraft` holds `isEmpty` in a ref specifically so a per-render closure
+  // never restarts the debounce (see that hook's own JSDoc). It is NOT memoized because there is
+  // nothing to gain from memoizing it: the ref's `.current` never changes after mount anyway.
+  const draft = useFormDraft<BookingDraftState>(
+    'booking:new',
+    draftState,
+    (state) => isBookingDraftEmpty(state, seededBookingDateRef.current),
+    !initial
+  );
+
+  function handleRestoreDraft() {
+    const restored = draft.restore();
+    if (!restored) return;
+    setForm(restored.form);
+    setPassengers(restored.passengers);
+    setShareAll(restored.shareAll);
+    setShared(restored.shared);
+    setTotalAmount(restored.totalAmount);
+    setTotalTouched(restored.totalTouched);
+  }
+
+  function handleCancelClick() {
+    if (draft.hasContent) {
+      setLeaveOpen(true);
+      return;
+    }
+    onCancel();
+  }
+
   // Derived during render, deliberately NOT state — there is nothing to keep in sync and no effect
   // involved. Compared in integer cents so ordinary decimal amounts can't produce a phantom
   // mismatch. A blank or unparseable total means "no total entered", not zero.
@@ -263,6 +336,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
       if (duplicate) setPendingDuplicate({ input, duplicate });
     },
     onSuccess: () => {
+      draft.discard();
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       onDone();
@@ -447,6 +521,13 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
   return (
     <>
     <form onSubmit={handleSubmit} className="space-y-3">
+      {draft.pending && (
+        <DraftRestoreBar
+          savedAt={draft.pending.savedAt}
+          onRestore={handleRestoreDraft}
+          onDiscard={draft.discard}
+        />
+      )}
       {/* Row: Booking Type | Invoice# | Booking Date | Mark as voided — the create dialog passes a
           typeSelector for the first cell; the edit dialog passes none (a New booking can't become a
           Reissue), so that cell is dropped entirely and the grid collapses by one column rather than
@@ -992,7 +1073,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
         </p>
       )}
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={handleCancelClick}>
           Cancel
         </Button>
         <Button type="submit" disabled={saveMutation.isPending}>
@@ -1007,6 +1088,21 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
       onCreated={(fullName, customerId) => {
         updatePassenger(addCustomerIndex, { name: fullName, customer: customerId });
         setSearch(null);
+      }}
+    />
+    <LeaveFormDialog
+      open={leaveOpen}
+      onOpenChange={setLeaveOpen}
+      title="Leave this booking?"
+      onDiscard={() => {
+        draft.discard();
+        setLeaveOpen(false);
+        onCancel();
+      }}
+      onKeep={() => {
+        draft.keep();
+        setLeaveOpen(false);
+        onCancel();
       }}
     />
     </>

@@ -26,6 +26,7 @@ import { logoutRequest } from '../api/auth.api';
 import { useBranding } from '@/hooks/useBranding';
 import { useApplyTheme } from '../hooks/useApplyTheme';
 import { ThemeMenuItems } from './theme-toggle';
+import { clearAllDrafts } from '@/utils/formDraft';
 
 export default function AppShell() {
   const user = useAuthStore((s) => s.user);
@@ -43,11 +44,15 @@ export default function AppShell() {
   }
 
   async function handleSignOut() {
+    // Capture the id BEFORE clearSession() — the sweep is scoped to this user's keys so a
+    // colleague's drafts on a shared office PC survive.
+    const signingOutUserId = user?.id ?? null;
     try {
       await logoutRequest();
     } catch {
       // Ignore — local session is cleared and the user is navigated away regardless.
     } finally {
+      if (signingOutUserId) clearAllDrafts(signingOutUserId);
       clearSession();
       await router.navigate({ to: '/login' });
     }

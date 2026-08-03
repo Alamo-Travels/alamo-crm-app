@@ -139,3 +139,27 @@ export function parseDateInput(text: string): string | null {
 
   return null;
 }
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/** Coarse "how long ago", for the draft restore bar. Returns '' for anything unparseable — the bar
+ * still renders, it just doesn't claim a time. */
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const elapsed = now.getTime() - then;
+  if (elapsed < MINUTE_MS) return 'just now';
+  if (elapsed < HOUR_MS) {
+    const minutes = Math.floor(elapsed / MINUTE_MS);
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  }
+  if (elapsed < DAY_MS) {
+    const hours = Math.floor(elapsed / HOUR_MS);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  }
+  const days = Math.floor(elapsed / DAY_MS);
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+}

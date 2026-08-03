@@ -9,7 +9,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { BookingRow, createAdjustment, listBookings } from '@/api/bookings.api';
 import { useBranding } from '@/hooks/useBranding';
 import { agencyToday } from '@/utils/agencyTime';
-import { AdjustmentSharedFields } from './adjustment-shared-fields';
+import { DraftRestoreBar } from '@/components/draft-restore-bar';
+import { LeaveFormDialog } from '@/components/leave-form-dialog';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { FormDraftKey } from '@/utils/formDraft';
+import { AdjustmentSharedFields, AdjustmentSharedValue } from './adjustment-shared-fields';
 
 interface AdjustmentBookingFormProps {
   bookingType: 'Reissue' | 'Refund';
@@ -22,6 +26,42 @@ interface PnrGroup {
   pnr: string;
   invoiceNumber: string;
   passengers: BookingRow[];
+}
+
+// `AdjustmentSharedValue` (from adjustment-shared-fields.tsx) IS this form's shared-fields shape —
+// aliased here rather than re-declared, because it is also the persisted draft schema: a future
+// divergence between two structurally-identical-by-coincidence types would silently require a
+// DRAFT_SCHEMA_VERSION bump nobody would notice.
+type AdjustmentShared = AdjustmentSharedValue;
+
+export interface AdjustmentDraftState {
+  pnrQuery: string;
+  // WARNING: `selectedGroup` (a `PnrGroup`, which embeds `BookingRow[]`) is persisted to
+  // localStorage as part of this draft. `BookingRow` is an API type declared in bookings.api.ts, so
+  // a backend projection change can alter what this drafts WITHOUT anyone touching a draft file at
+  // all. Any shape change here — including one driven purely by the API — requires bumping
+  // `DRAFT_SCHEMA_VERSION` in src/utils/formDraft.ts, for the same reason as AdjustmentSharedValue
+  // above: a stale v1 draft restoring with a missing/renamed field feeds `undefined` to a controlled
+  // input or `NaN` into a numeric one.
+  selectedGroup: PnrGroup | null;
+  checked: Record<string, boolean>;
+  amounts: Record<string, string>;
+  shared: AdjustmentShared;
+  /**
+   * Passenger ids whose adjustment ALREADY succeeded in a partially-failed submit. Serialised as an
+   * array because JSON.stringify turns a Set into {}.
+   *
+   * DO NOT DROP THIS FIELD. Restoring a partial failure without it makes "Retry failed" re-send the
+   * passengers that already went through, and adjustments have no duplicate detection at the API —
+   * the ledger is silently double-posted with nothing downstream to catch it.
+   */
+  succeeded: string[];
+}
+
+/** Nothing is worth keeping until a parent PNR has been picked (or at least searched for). */
+function isAdjustmentDraftEmpty(state: AdjustmentDraftState): boolean {
+  if (state.selectedGroup) return false;
+  return state.pnrQuery.trim().length === 0;
 }
 
 /** A prefilled 'YYYY-MM-DD' date, or '' when it is absent or already in the past. Both arguments
@@ -41,7 +81,7 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
   const [selectedGroup, setSelectedGroup] = useState<PnrGroup | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [shared, setShared] = useState({
+  const [shared, setShared] = useState<AdjustmentShared>({
     bookingDate: new Date().toISOString().slice(0, 10),
     pnr: '',
     airlineCode: '',
@@ -50,14 +90,53 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
     depDate: '',
     arrDate: '',
     remark: '',
-    paymentStatus: 'paid' as 'paid' | 'pending',
-    paymentType: 'card' as 'card' | 'check' | 'cash',
+    paymentStatus: 'paid',
+    paymentType: 'card',
     pendingAmount: '',
   });
   const [succeeded, setSucceeded] = useState<Set<string>>(new Set());
   const [failedNames, setFailedNames] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const queryClient = useQueryClient();
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  // Two separate draft keys, chosen by bookingType — a Reissue draft must never surface in the
+  // Refund form or vice versa.
+  const draftKey: FormDraftKey = bookingType === 'Reissue' ? 'booking:reissue' : 'booking:refund';
+  const draftState = useMemo<AdjustmentDraftState>(
+    () => ({ pnrQuery, selectedGroup, checked, amounts, shared, succeeded: Array.from(succeeded) }),
+    [pnrQuery, selectedGroup, checked, amounts, shared, succeeded]
+  );
+  // Always a create form, so drafting is unconditionally enabled.
+  const draft = useFormDraft<AdjustmentDraftState>(draftKey, draftState, isAdjustmentDraftEmpty, true);
+
+  function handleRestoreDraft() {
+    const restored = draft.restore();
+    if (!restored) return;
+    setPnrQuery(restored.pnrQuery);
+    setSelectedGroup(restored.selectedGroup);
+    setChecked(restored.checked);
+    setAmounts(restored.amounts);
+    setShared(restored.shared);
+    // UNION the stored `succeeded` with the LIVE one — never replace. The restore bar is
+    // non-blocking, so a user can leave it unresolved, type a PNR, pick a group, and submit before
+    // ever clicking Restore; if p1 posts and p2 fails in that same session, live `succeeded` is
+    // `{p1}`. Replacing it with the stored draft's `succeeded` (which could be `[]`, from an OLDER
+    // session) would forget that p1 already posted, and "Retry failed" would re-post it — the exact
+    // ledger double-post this task exists to prevent, reached through Restore instead of an abandon.
+    // Both sets are simply statements of fact ("these passenger ids genuinely posted"), one from a
+    // previous session and one from this one — a union of two true facts can never be wrong, and
+    // can only ever prevent a re-post, never cause one. Do NOT "simplify" this back to a replace.
+    setSucceeded(new Set([...succeeded, ...restored.succeeded]));
+  }
+
+  function handleCancelClick() {
+    if (draft.hasContent) {
+      setLeaveOpen(true);
+      return;
+    }
+    onCancel();
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedPnrQuery(pnrQuery), 300);
@@ -153,14 +232,32 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
           },
         });
         newSucceeded.add(p.id);
+        // Flush to React state after EACH success — NOT once after the whole loop. The draft's
+        // `succeeded` must reflect what has ALREADY posted at every point during this (sequential,
+        // potentially slow) loop, because the user can abandon mid-flight — Cancel (disabled below
+        // while submitting, as a belt-and-braces measure) or Escape, which bypasses that entirely
+        // and closes the dialog directly. Without a per-iteration flush, the draft under-reports
+        // what succeeded for the whole loop duration, and restoring it re-posts passengers that
+        // already went through — exactly the double-post this task exists to prevent.
+        setSucceeded(new Set(newSucceeded));
+        // THIS is what actually closes the window: `useFormDraft`'s ordinary autosave is
+        // debounced 500ms, and every `setSucceeded` call above RESTARTS that timer rather than
+        // ever letting it fire — a fast submit loop (multiple sub-500ms passenger calls) can
+        // finish before the debounce ever settles, so the plain `setSucceeded` call alone does NOT
+        // guarantee anything reaches storage before the user abandons. `draft.flush(...)` bypasses
+        // the debounce and writes synchronously. It's passed an explicit override rather than
+        // relying on `draft`'s own closed-over `state`, because this closure hasn't re-rendered
+        // since `handleSubmit` started — `draft`'s `state` here is still whatever `succeeded` was
+        // BEFORE this iteration, not `newSucceeded`.
+        draft.flush({ pnrQuery, selectedGroup, checked, amounts, shared, succeeded: Array.from(newSucceeded) });
       } catch {
         failures.push(p.passengerName);
       }
     }
-    setSucceeded(newSucceeded);
     setFailedNames(failures);
     setSubmitting(false);
     if (failures.length === 0) {
+      draft.discard();
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       onDone();
     }
@@ -175,7 +272,15 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
         : 'Record refund';
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="space-y-3">
+      {draft.pending && (
+        <DraftRestoreBar
+          savedAt={draft.pending.savedAt}
+          onRestore={handleRestoreDraft}
+          onDiscard={draft.discard}
+        />
+      )}
       <div className="space-y-2">
         <Label htmlFor="adjustment-pnr-search" required>Original PNR</Label>
         <Input
@@ -250,7 +355,9 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
       )}
 
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        {/* Disabled while submitting as an adjunct only — it does NOT cover Escape, which bypasses
+            this button entirely, so the real fix is the per-iteration `succeeded` flush above. */}
+        <Button type="button" variant="outline" onClick={handleCancelClick} disabled={submitting}>
           Cancel
         </Button>
         <Button type="submit" disabled={!selectedGroup || remainingTargets.length === 0 || submitting}>
@@ -259,5 +366,21 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
         </Button>
       </DialogFooter>
     </form>
+    <LeaveFormDialog
+      open={leaveOpen}
+      onOpenChange={setLeaveOpen}
+      title={bookingType === 'Reissue' ? 'Leave this reissue?' : 'Leave this refund?'}
+      onDiscard={() => {
+        draft.discard();
+        setLeaveOpen(false);
+        onCancel();
+      }}
+      onKeep={() => {
+        draft.keep();
+        setLeaveOpen(false);
+        onCancel();
+      }}
+    />
+    </>
   );
 }

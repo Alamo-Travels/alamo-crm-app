@@ -62,7 +62,12 @@ export function CreateBookingDialog({ open, onOpenChange }: CreateBookingDialogP
           <>
             <div className="w-1/3 space-y-1 pr-2">{typeSelector}</div>
             <AdjustmentBookingForm
-              key={bookingKind}
+              // Remount on reopen as well as on kind switch. This key change is INERT — Radix already
+              // unmounts DialogContent on close, so useFormDraft's lazy initialiser was already
+              // re-reading storage on every reopen before this existed. Kept purely as belt-and-braces
+              // consistency with how BookingForm is keyed just above; nothing regressed without it.
+              // See CLAUDE.md's form-drafts section — do not re-cite "makes the re-read work".
+              key={`${bookingKind}:${open ? 'open' : 'closed'}`}
               bookingType={bookingKind}
               onDone={() => onOpenChange(false)}
               onCancel={() => onOpenChange(false)}

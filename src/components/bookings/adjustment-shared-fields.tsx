@@ -6,6 +6,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { maxIsoDate } from '@/utils/dateFormat';
 
+/**
+ * WARNING: this shape doubles as a persisted draft schema — it is aliased verbatim as
+ * `AdjustmentDraftState.shared` in adjustment-booking-form.tsx, which is drafted to localStorage.
+ * This file is also owned by edit-adjustment-dialog.tsx, so a field added here for the EDIT dialog
+ * silently changes what a stored draft looks like. Adding/removing/renaming a field here requires
+ * bumping `DRAFT_SCHEMA_VERSION` in src/utils/formDraft.ts — otherwise a v1 draft saved before the
+ * change restores with a missing/stale key, which for a controlled input means `undefined` (a
+ * React controlled->uncontrolled warning) and for a numeric field like `pendingAmount` means
+ * `Number(undefined)` -> `NaN` reaching `createAdjustment`.
+ */
 export interface AdjustmentSharedValue {
   bookingDate: string;
   pnr: string;

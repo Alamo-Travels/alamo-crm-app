@@ -7,6 +7,7 @@ import { createAppRouter } from '../router';
 import { useAuthStore } from '../stores/authStore';
 import * as authApi from '../api/auth.api';
 import * as organizationApi from '../api/organization.api';
+import { clearAllDrafts, readDraft, writeDraft } from '../utils/formDraft';
 
 function renderAuthedApp(initialPath: string) {
   useAuthStore.setState({
@@ -175,5 +176,23 @@ describe('AppShell', () => {
       expect(useAuthStore.getState().user).toBeNull();
       expect(router.state.location.pathname).toBe('/login');
     });
+  });
+
+  it("sign-out clears the signing-out user's drafts but not a colleague's", async () => {
+    localStorage.clear();
+    vi.spyOn(authApi, 'logoutRequest').mockResolvedValue(undefined);
+    writeDraft('1', 'customer', { form: { firstName: 'Mine' } });
+    writeDraft('99', 'customer', { form: { firstName: 'Theirs' } });
+
+    renderAuthedApp('/customers');
+    await screen.findByRole('link', { name: 'Dashboard' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
+
+    await waitFor(() => expect(readDraft('1', 'customer')).toBeNull());
+    expect(readDraft('99', 'customer')).not.toBeNull();
+
+    clearAllDrafts('99'); // don't leak into the next test in this file
   });
 });

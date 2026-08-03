@@ -12,12 +12,15 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { CodeSearchField } from '@/components/code-search-field';
 import { DateField } from '@/components/date-field';
+import { DraftRestoreBar } from '@/components/draft-restore-bar';
+import { LeaveFormDialog } from '@/components/leave-form-dialog';
 import { MultiCodeSearchField } from '@/components/multi-code-search-field';
 import { PhoneInput } from '@/components/phone-input';
 import { CabinSelectField } from '@/components/enquiries/cabin-select-field';
 import { PassengerCountField, PassengerCounts } from '@/components/enquiries/passenger-count-field';
 import { searchAirlines, searchAirports } from '@/api/flightData.api';
 import { useBranding } from '@/hooks/useBranding';
+import { useFormDraft } from '@/hooks/useFormDraft';
 import { agencyToday } from '@/utils/agencyTime';
 import { maxIsoDate } from '@/utils/dateFormat';
 import {
@@ -83,6 +86,30 @@ const emptyForm: EnquiryFormState = {
   notes: '',
 };
 
+/** Every field in `emptyForm` that has a meaningful default (round trip, one adult, no stops
+ * preference, two blank legs) must read as UNTOUCHED here, or opening the dialog and closing it
+ * would leave a draft behind. `segments` is checked on from/to/date only — a leg's `touched`
+ * mirroring flag can be `true` on an otherwise-blank row (hand-edited then cleared again), but
+ * that flag has no visible effect on an empty row, so it must not count as content either. */
+function isEnquiryDraftEmpty(state: EnquiryFormState): boolean {
+  return (
+    !state.name &&
+    !state.phone &&
+    !state.email &&
+    !state.dateFlexibility &&
+    !state.budgetPerPax &&
+    !state.notes &&
+    state.tripType === 'round' &&
+    state.cabins.length === 0 &&
+    state.preferredAirlines.length === 0 &&
+    state.stops === 'any' &&
+    state.pax.adults === 1 &&
+    state.pax.children === 0 &&
+    state.pax.infants === 0 &&
+    state.segments.every((segment) => !segment.from && !segment.to && !segment.date)
+  );
+}
+
 const TRIP_TYPE_LABELS: Record<TripType, string> = {
   oneway: 'One-way',
   round: 'Round trip',
@@ -116,6 +143,25 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
   // as the booking form's trip dates.
   const { timeZone } = useBranding();
   const minTravelDate = isEdit ? undefined : agencyToday(timeZone);
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  // `open` is part of `enabled` because this dialog never unmounts (an `open` prop, not a
+  // remount) — see useFormDraft's closed -> open re-read. Drafts are create-only: an abandoned
+  // edit loses nothing since the record on file is intact.
+  const draft = useFormDraft<EnquiryFormState>('enquiry', form, isEnquiryDraftEmpty, open && !isEdit);
+
+  function handleRestoreDraft() {
+    const restored = draft.restore();
+    if (restored) setForm(restored);
+  }
+
+  function handleCancelClick() {
+    if (draft.hasContent) {
+      setLeaveOpen(true);
+      return;
+    }
+    onOpenChange(false);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -207,6 +253,7 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
       return enquiry ? updateEnquiry(enquiry.id, payload) : createEnquiry(payload);
     },
     onSuccess: () => {
+      draft.discard();
       queryClient.invalidateQueries({ queryKey: ['enquiries'] });
       onOpenChange(false);
       toast.success(enquiry ? 'Enquiry updated' : 'Enquiry created');
@@ -228,6 +275,13 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
           <DialogTitle>{isEdit ? 'Edit enquiry' : 'New enquiry'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {draft.pending && (
+            <DraftRestoreBar
+              savedAt={draft.pending.savedAt}
+              onRestore={handleRestoreDraft}
+              onDiscard={draft.discard}
+            />
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label htmlFor="enquiry-name" required>Enquirer name</Label>
@@ -445,7 +499,7 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
             <p className="text-sm text-destructive">Save failed. Check your connection and try again.</p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleCancelClick}>
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
@@ -454,6 +508,21 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
             </Button>
           </DialogFooter>
         </form>
+        <LeaveFormDialog
+          open={leaveOpen}
+          onOpenChange={setLeaveOpen}
+          title="Leave this enquiry?"
+          onDiscard={() => {
+            draft.discard();
+            setLeaveOpen(false);
+            onOpenChange(false);
+          }}
+          onKeep={() => {
+            draft.keep();
+            setLeaveOpen(false);
+            onOpenChange(false);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

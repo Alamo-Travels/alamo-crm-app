@@ -1,4 +1,17 @@
 import '@testing-library/jest-dom';
+import { beforeEach } from 'vitest';
+
+// Global test-isolation guard: several forms now autosave a draft to localStorage as the user
+// types (see src/utils/formDraft.ts). Only the four *.draft.test.tsx files used to clear it
+// themselves — any OTHER test that types into one of those forms for ≥500ms (its debounce window)
+// writes a draft that then persists into whichever test runs next in the same file, where it can
+// silently render a restore bar nobody asked for. Checked against the theme suites first
+// (themeStore.test.ts / useApplyTheme.test.ts / theme-toggle.test.tsx all touch localStorage,
+// some deliberately) — none of them seed it at module scope or in a beforeAll, only inline inside
+// individual test bodies, which this beforeEach runs safely before every time.
+beforeEach(() => {
+  localStorage.clear();
+});
 
 // jsdom lacks several browser APIs that Radix UI (Select, Sheet, Tooltip)
 // and the shadcn sidebar (use-mobile's matchMedia) depend on.

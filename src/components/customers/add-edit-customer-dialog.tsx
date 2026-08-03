@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, Globe, IdCard, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -6,12 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DateField } from '@/components/date-field';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DraftRestoreBar } from '@/components/draft-restore-bar';
 import { IconInput } from '@/components/icon-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LeaveFormDialog } from '@/components/leave-form-dialog';
 import { PhoneInput } from '@/components/phone-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useFormDraft } from '@/hooks/useFormDraft';
 import {
   createCustomer,
   updateCustomer,
@@ -45,6 +48,32 @@ const emptyForm = {
   passportIssuingCountry: '',
   passportExpiryDate: '',
 };
+
+interface CustomerDraftState {
+  form: typeof emptyForm;
+  /** A File cannot be serialised, and base64ing a passport scan into localStorage is both a size
+   * and a privacy problem — so only the NAME is kept, purely to tell the user to re-attach it. */
+  passportFileName: string | null;
+}
+
+function isCustomerDraftEmpty(state: CustomerDraftState): boolean {
+  const f = state.form;
+  const typed = Boolean(
+    f.firstName ||
+      f.middleName ||
+      f.lastName ||
+      f.dob ||
+      f.phone ||
+      f.email ||
+      f.passportNumber ||
+      f.passportIssuingCountry ||
+      f.passportExpiryDate ||
+      f.verified ||
+      state.passportFileName
+  );
+  // `gender` defaults to 'M', so only a change away from the default counts as content.
+  return !typed && f.gender === 'M';
+}
 
 export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated }: AddEditCustomerDialogProps) {
   const [form, setForm] = useState(emptyForm);
@@ -81,6 +110,30 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
     }
   }, [open, customer]);
 
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const draftState = useMemo<CustomerDraftState>(
+    () => ({ form, passportFileName: passportFile?.name ?? null }),
+    [form, passportFile]
+  );
+  // `open` is part of `enabled` because this dialog never unmounts — see useFormDraft's
+  // closed -> open re-read. Drafts are create-only: an abandoned edit loses nothing since the
+  // record on file is intact.
+  const draft = useFormDraft<CustomerDraftState>('customer', draftState, isCustomerDraftEmpty, open && !isEdit);
+
+  function handleRestoreDraft() {
+    const restored = draft.restore();
+    if (!restored) return;
+    setForm(restored.form);
+  }
+
+  function handleCancelClick() {
+    if (draft.hasContent) {
+      setLeaveOpen(true);
+      return;
+    }
+    onOpenChange(false);
+  }
+
   const mutation = useMutation({
     mutationFn: async () => {
       const passportTouched =
@@ -112,6 +165,7 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
       return isEdit ? updateCustomer(customer!.id, payload) : createCustomer(payload);
     },
     onSuccess: (data) => {
+      draft.discard();
       queryClient.invalidateQueries({ queryKey: ['customers', 'list'] });
       queryClient.invalidateQueries({ queryKey: ['customers', 'search'] });
       if (!isEdit) onCreated?.(ticketingName(form), data.id);
@@ -154,6 +208,18 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
           <DialogTitle>{isEdit ? 'Edit customer' : 'Add customer'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {draft.pending && (
+            <DraftRestoreBar
+              savedAt={draft.pending.savedAt}
+              note={
+                draft.pending.state.passportFileName
+                  ? `Passport file ${draft.pending.state.passportFileName} was not saved — re-attach it.`
+                  : undefined
+              }
+              onRestore={handleRestoreDraft}
+              onDiscard={draft.discard}
+            />
+          )}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold">Personal Information</h3>
             <div className="grid grid-cols-3 gap-4">
@@ -311,7 +377,7 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
             <p className="text-sm text-destructive">Save failed. Check your connection and try again.</p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleCancelClick}>
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
@@ -320,6 +386,21 @@ export function AddEditCustomerDialog({ open, onOpenChange, customer, onCreated 
             </Button>
           </DialogFooter>
         </form>
+        <LeaveFormDialog
+          open={leaveOpen}
+          onOpenChange={setLeaveOpen}
+          title="Leave this customer?"
+          onDiscard={() => {
+            draft.discard();
+            setLeaveOpen(false);
+            onOpenChange(false);
+          }}
+          onKeep={() => {
+            draft.keep();
+            setLeaveOpen(false);
+            onOpenChange(false);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
