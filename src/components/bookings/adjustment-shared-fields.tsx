@@ -77,7 +77,7 @@ export function AdjustmentSharedFields({ bookingType, value, onChange, minTripDa
               icon={<PlaneTakeoff />}
               value={value.depCity}
               onChange={(e) => onChange({ depCity: e.target.value })}
-              placeholder="Departure city — e.g. ORD"
+              placeholder="Departure city — e.g. IAH"
               required
             />
           </div>

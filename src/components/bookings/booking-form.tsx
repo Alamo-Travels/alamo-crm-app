@@ -790,7 +790,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
                 onChange={(depCity) => setForm({ ...form, depCity })}
                 search={searchAirports}
                 queryKey="airports"
-                placeholder="e.g. Chicago or ORD"
+                placeholder="e.g. Houston or IAH"
                 icon={<PlaneTakeoff />}
                 required
               />
