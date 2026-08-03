@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { DateField } from '@/components/date-field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -91,11 +92,11 @@ export function RecordPaymentDialog({ row, onOpenChange, queryKeyPrefix }: Recor
           </div>
           <div className="space-y-2">
             <Label htmlFor="record-payment-paid-on">Paid on</Label>
-            <Input
+            <DateField
               id="record-payment-paid-on"
-              type="date"
+              ariaLabel="Paid on"
               value={paidOn}
-              onChange={(e) => setPaidOn(e.target.value)}
+              onChange={setPaidOn}
             />
           </div>
           {status === 'pending' && (

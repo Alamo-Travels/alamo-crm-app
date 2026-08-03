@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { DateField } from '@/components/date-field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -252,12 +253,11 @@ export function SendInvoiceDialog({ open, onOpenChange }: SendInvoiceDialogProps
               </div>
               <div className="space-y-1">
                 <Label htmlFor="invoice-date" required>Invoice date</Label>
-                <Input
+                <DateField
                   id="invoice-date"
-                  aria-label="Invoice date"
-                  type="date"
+                  ariaLabel="Invoice date"
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  onChange={setInvoiceDate}
                   required
                 />
               </div>
@@ -302,12 +302,11 @@ export function SendInvoiceDialog({ open, onOpenChange }: SendInvoiceDialogProps
                     placeholder="Description"
                     required
                   />
-                  <Input
-                    aria-label={`Line date ${index + 1}`}
-                    type="date"
+                  <DateField
+                    ariaLabel={`Line date ${index + 1}`}
                     className="w-36"
                     value={item.date}
-                    onChange={(e) => updateLine(index, { date: e.target.value })}
+                    onChange={(date) => updateLine(index, { date })}
                   />
                   <Input
                     aria-label={`Line qty ${index + 1}`}

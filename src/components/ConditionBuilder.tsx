@@ -1,3 +1,4 @@
+import { DateField } from '@/components/date-field';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -186,12 +187,11 @@ export default function ConditionBuilder({ fields, users, conditions, onChange }
         );
       case 'date':
         return (
-          <Input
-            aria-label={label}
-            type="date"
+          <DateField
+            ariaLabel={label}
             value={String(condition.value ?? '')}
-            onChange={(e) => setValue(index, e.target.value)}
-            className="w-40"
+            onChange={(iso) => setValue(index, iso)}
+            className="w-[150px]"
           />
         );
       case 'boolean':

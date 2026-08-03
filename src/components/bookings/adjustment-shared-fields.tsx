@@ -1,4 +1,5 @@
 import { Plane, PlaneLanding, PlaneTakeoff, StickyNote, Ticket } from 'lucide-react';
+import { DateField } from '@/components/date-field';
 import { IconInput } from '@/components/icon-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,12 +40,11 @@ export function AdjustmentSharedFields({ bookingType, value, onChange, minTripDa
     <>
       <div className="space-y-2">
         <Label htmlFor="adjustment-booking-date" required>Adjustment booking date</Label>
-        <Input
+        <DateField
           id="adjustment-booking-date"
-          aria-label="Adjustment booking date"
-          type="date"
+          ariaLabel="Adjustment booking date"
           value={value.bookingDate}
-          onChange={(e) => onChange({ bookingDate: e.target.value })}
+          onChange={(bookingDate) => onChange({ bookingDate })}
           required
         />
       </div>
@@ -95,26 +95,24 @@ export function AdjustmentSharedFields({ bookingType, value, onChange, minTripDa
           </div>
           <div className="space-y-2">
             <Label htmlFor="adjustment-dep-date">Departure date</Label>
-            <Input
+            <DateField
               id="adjustment-dep-date"
-              aria-label="Adjustment departure date"
-              type="date"
+              ariaLabel="Adjustment departure date"
               value={value.depDate}
-              onChange={(e) => onChange({ depDate: e.target.value })}
-              min={minTripDate}
+              onChange={(depDate) => onChange({ depDate })}
+              minDate={minTripDate}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="adjustment-arr-date">Arrival date</Label>
-            <Input
+            <DateField
               id="adjustment-arr-date"
-              aria-label="Adjustment arrival date"
-              type="date"
+              ariaLabel="Adjustment arrival date"
               value={value.arrDate}
-              onChange={(e) => onChange({ arrDate: e.target.value })}
+              onChange={(arrDate) => onChange({ arrDate })}
               // Arrival additionally can't precede its own departure. Both bounds vanish when the
               // edit flow omits `minTripDate`, so a historic adjustment stays correctable.
-              min={minTripDate && maxIsoDate(minTripDate, value.depDate)}
+              minDate={minTripDate && maxIsoDate(minTripDate, value.depDate)}
             />
           </div>
         </>

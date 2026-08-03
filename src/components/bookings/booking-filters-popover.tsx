@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
+import { DateField } from '@/components/date-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,20 +59,18 @@ function DateRangeFields({
             <SelectItem value="between">Between</SelectItem>
           </SelectContent>
         </Select>
-        <Input
-          aria-label={range.operator === 'between' ? `${ariaPrefix} from` : `${ariaPrefix} value`}
-          type="date"
+        <DateField
+          ariaLabel={range.operator === 'between' ? `${ariaPrefix} from` : `${ariaPrefix} value`}
           value={range.from ?? ''}
-          onChange={(e) => onChange({ ...range, from: e.target.value })}
-          className="w-[140px]"
+          onChange={(from) => onChange({ ...range, from })}
+          className="w-[150px]"
         />
         {range.operator === 'between' && (
-          <Input
-            aria-label={`${ariaPrefix} to`}
-            type="date"
+          <DateField
+            ariaLabel={`${ariaPrefix} to`}
             value={range.to ?? ''}
-            onChange={(e) => onChange({ ...range, to: e.target.value })}
-            className="w-[140px]"
+            onChange={(to) => onChange({ ...range, to })}
+            className="w-[150px]"
           />
         )}
       </div>

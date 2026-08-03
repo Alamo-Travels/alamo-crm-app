@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarIcon } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -22,6 +22,9 @@ interface DateFieldProps {
    * hidden native input's `min`, AND the typed-entry parser (all three must agree, since the
    * native input is what carries the form value on submit). */
   minDate?: string;
+  /** Applied to the field's outer wrapper, so a caller can size it (the visible input is `w-full`).
+   * Used where a date sits in a fixed-width column, e.g. the invoice line-item rows. */
+  className?: string;
 }
 
 /** The shadcn PopoverContent base styling, minus its Portal (see the render note below). */
@@ -33,6 +36,24 @@ const POPOVER_CONTENT_CLASS = cn(
   'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
   'origin-[--radix-popover-content-transform-origin]',
 );
+
+/** The nearest scrollable ancestor of `node`, or null if there is none before `<body>`.
+ *
+ * This is what the popover must collide against. The content is rendered INLINE (see the render
+ * note below), and a shadcn `DialogContent` is BOTH `overflow-y-auto` AND `translate-*` — the
+ * transform makes it the containing block for the popover's `position: fixed`, so the dialog's
+ * own scroll box clips the calendar. Radix's collision middlewares default to the VIEWPORT
+ * (deliberately, see `@radix-ui/react-popper`), which has room to spare below a dialog, so
+ * without an explicit boundary the calendar never flips up and just lands past the dialog's edge. */
+function findScrollBoundary(node: HTMLElement | null): HTMLElement | null {
+  let el = node?.parentElement ?? null;
+  while (el && el !== document.body) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+    el = el.parentElement;
+  }
+  return null;
+}
 
 function toIso(date: Date): string {
   const year = date.getFullYear();
@@ -51,11 +72,13 @@ function toIso(date: Date): string {
  * focus / land in the pointer-events-disabled body of a parent Dialog, which would stop the field
  * from staying focused-and-typeable while the calendar is open. Rendering the content inline (the
  * Dialog content has no overflow clip) keeps it clickable inside a Dialog without a focus trap. */
-export function DateField({ ariaLabel, value, onChange, id, required, minDate }: DateFieldProps) {
+export function DateField({ ariaLabel, value, onChange, id, required, minDate, className }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   // `draft` is the raw text while the user is typing; null means "not editing, show the value".
   const [draft, setDraft] = useState<string | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
+  // Resolved on open (layout can change between renders, and it costs nothing while closed).
+  const [boundary, setBoundary] = useState<HTMLElement | null>(null);
   const selected = value ? new Date(`${value}T00:00:00`) : undefined;
   const min = minDate ? new Date(`${minDate}T00:00:00`) : undefined;
 
@@ -64,6 +87,10 @@ export function DateField({ ariaLabel, value, onChange, id, required, minDate }:
   const endMonth = new Date(currentYear + 10, 11, 31);
 
   const displayValue = draft ?? (value ? formatDisplayDate(value) : '');
+
+  useEffect(() => {
+    if (open) setBoundary(findScrollBoundary(anchorRef.current));
+  }, [open]);
 
   function commitDraft() {
     if (draft === null) return;
@@ -83,7 +110,7 @@ export function DateField({ ariaLabel, value, onChange, id, required, minDate }:
   }
 
   return (
-    <div className="relative">
+    <div className={cn('relative', className)}>
       <input
         id={id}
         type="date"
@@ -128,6 +155,12 @@ export function DateField({ ariaLabel, value, onChange, id, required, minDate }:
         <PopoverPrimitive.Content
           align="start"
           sideOffset={4}
+          // Flip/shift against the scrolling dialog rather than the viewport, so a field near the
+          // bottom of a long form opens its calendar UPWARD instead of past the dialog's clipped
+          // edge. `undefined` (not `null`) when there's no scroll container — Radix treats any
+          // supplied value as "explicit boundaries" and `null` would yield an empty boundary set.
+          collisionBoundary={boundary ?? undefined}
+          collisionPadding={8}
           className={POPOVER_CONTENT_CLASS}
           // Keep focus in the field so the user can keep typing while the calendar is open.
           onOpenAutoFocus={(e) => e.preventDefault()}
