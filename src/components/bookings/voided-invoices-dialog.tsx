@@ -85,7 +85,7 @@ function VoidedInvoicesTable() {
 export function VoidedInvoicesDialog({ open, onOpenChange }: VoidedInvoicesDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent panel dismissible={false} className="max-w-2xl">
+      <DialogContent panel dismissible={false} className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Voided invoices</DialogTitle>
         </DialogHeader>
