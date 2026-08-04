@@ -379,4 +379,31 @@ describe('BookingForm total invoice amount', () => {
     await setRowPending(user, 'Payment status');
     expect(screen.getByLabelText('Amount owed')).toHaveAttribute('min', '0');
   });
+
+  // `step` defaults to 1, so without this a cents value is a stepMismatch and the browser blocks
+  // the whole form's submit — including from the total, which is never even submitted. jsdom does
+  // not run interactive constraint validation, so the attribute is the only thing a test here can
+  // see; the behaviour it guards is browser-side.
+  it('accepts cents on every money field — total, per-passenger amount, and amount owed', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    expect(total()).toHaveAttribute('step', '0.01');
+    expect(screen.getByLabelText('Amount')).toHaveAttribute('step', '0.01');
+
+    await user.click(screen.getByRole('checkbox', { name: /same payment & remark for all passengers/i }));
+    await setRowPending(user, 'Payment status');
+    expect(screen.getByLabelText('Amount owed')).toHaveAttribute('step', '0.01');
+  });
+
+  it('splits a total that carries cents', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByRole('button', { name: 'Add passenger' }));
+    await user.type(total(), '4275.29');
+
+    expect(screen.getByLabelText('Amount')).toHaveValue(2137.65);
+    expect(screen.getByLabelText('Amount 2')).toHaveValue(2137.64);
+  });
 });

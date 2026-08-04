@@ -178,6 +178,7 @@ export function AdjustmentSharedFields({ bookingType, value, onChange, minTripDa
             id="adjustment-amount-owed"
             aria-label="Adjustment amount owed"
             type="number"
+            step="0.01"
             value={value.pendingAmount}
             onChange={(e) => onChange({ pendingAmount: e.target.value })}
             placeholder="Amount owed"

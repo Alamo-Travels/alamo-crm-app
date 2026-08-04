@@ -125,6 +125,14 @@ describe('EnquiryDialog trip fields', () => {
     expect(screen.queryByRole('button', { name: 'Remove flight 1' })).not.toBeInTheDocument();
   });
 
+  // `step` defaults to 1, so without this a budget of $1,250.50 is a stepMismatch and the browser
+  // refuses this dialog's submit. jsdom does not run interactive constraint validation, so the
+  // attribute is all a test here can see.
+  it('accepts cents in the budget per passenger', () => {
+    renderDialog();
+    expect(screen.getByLabelText('Budget per passenger')).toHaveAttribute('step', '0.01');
+  });
+
   it('submits the full trip shape', async () => {
     const user = userEvent.setup();
     renderDialog();

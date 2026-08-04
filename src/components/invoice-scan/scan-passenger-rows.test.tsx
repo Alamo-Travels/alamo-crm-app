@@ -114,6 +114,14 @@ describe('ScanPassengerRows', () => {
     expect(screen.queryByText(/of the invoice total/i)).not.toBeInTheDocument();
   });
 
+  // A scanned Sabre fare is almost always cents. `step` defaults to 1, so without this every one
+  // of them is a stepMismatch — and the tests above type `4290.29` happily, because jsdom does not
+  // run interactive constraint validation. The attribute is all a test here can see.
+  it('accepts cents in a passenger amount', () => {
+    render(<Harness initial={INVOICE} onChange={vi.fn()} />);
+    expect(screen.getByLabelText('Amount for passenger 1')).toHaveAttribute('step', '0.01');
+  });
+
   it('flags amounts that overshoot the invoice total', async () => {
     render(<Harness initial={INVOICE} onChange={vi.fn()} />);
 

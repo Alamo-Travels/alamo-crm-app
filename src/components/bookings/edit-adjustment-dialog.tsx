@@ -109,6 +109,7 @@ function AdjustmentEditForm({ detail, onDone, onCancel, queryKeyPrefix }: Adjust
           id="edit-adjustment-amount"
           aria-label="Adjustment amount"
           type="number"
+          step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           required

@@ -267,4 +267,21 @@ describe('AdjustmentBookingForm', () => {
       expect(payload.payment).toEqual({ status: 'pending', type: 'card', amount: 80 });
     });
   });
+
+  // `step` defaults to 1, so without this a refund of $4,275.29 is a stepMismatch and the browser
+  // refuses the form's submit. jsdom does not run interactive constraint validation, so the
+  // attribute is all a test here can see — the behaviour it guards is browser-side.
+  it('accepts cents on the per-passenger amount and the shared Amount owed', async () => {
+    mockSearch([PAX_A]);
+    renderWithClient(<AdjustmentBookingForm bookingType="Reissue" onDone={vi.fn()} onCancel={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Original PNR'), 'GUD');
+    await userEvent.click(await screen.findByRole('button', { name: /GUDBFX — 0000150 — 1 passenger/ }));
+
+    expect(screen.getByLabelText('Amount for JOSEPH/SHINY S')).toHaveAttribute('step', '0.01');
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Adjustment payment status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Pending' }));
+    expect(screen.getByLabelText('Adjustment amount owed')).toHaveAttribute('step', '0.01');
+  });
 });

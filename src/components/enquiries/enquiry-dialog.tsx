@@ -476,6 +476,7 @@ export function EnquiryDialog({ open, onOpenChange, enquiry }: EnquiryDialogProp
                   aria-label="Budget per passenger"
                   type="number"
                   min={0}
+                  step="0.01"
                   className="pl-6"
                   value={form.budgetPerPax}
                   onChange={(e) => setForm({ ...form, budgetPerPax: e.target.value })}

@@ -124,6 +124,14 @@ describe('ConditionBuilder', () => {
     expect(screen.getByRole('spinbutton', { name: 'Condition 1 value to' })).toBeInTheDocument();
   });
 
+  // Both numeric fields the registry offers are money (Amount, Amount owed), so the default step of
+  // 1 made "amount greater than 450.50" a stepMismatch. `any` rather than `0.01` because this input
+  // is registry-driven — a future non-money number field must not inherit a two-decimal constraint.
+  it('does not constrain a numeric value to whole numbers', () => {
+    setup([{ field: 'amount', operator: 'greaterThan', value: 0 }]);
+    expect(screen.getByRole('spinbutton', { name: 'Condition 1 value' })).toHaveAttribute('step', 'any');
+  });
+
   it('enum in renders one checkbox per value; boolean renders a Yes/No select', async () => {
     const onChange = setup([{ field: 'paymentType', operator: 'in', value: [] }]);
     await userEvent.click(screen.getByRole('checkbox', { name: 'Condition 1 value cash' }));

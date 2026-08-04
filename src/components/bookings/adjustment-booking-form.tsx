@@ -329,6 +329,7 @@ export function AdjustmentBookingForm({ bookingType, onDone, onCancel }: Adjustm
                 <Input
                   aria-label={`Amount for ${p.passengerName}`}
                   type="number"
+                  step="0.01"
                   className="w-32"
                   value={amounts[p.id] ?? ''}
                   onChange={(e) => setAmounts({ ...amounts, [p.id]: e.target.value })}

@@ -305,4 +305,16 @@ describe('EditAdjustmentDialog', () => {
     expect(await screen.findByText('This change would drop the invoice total below what is still owed.')).toBeInTheDocument();
     expect(screen.queryByText(/check your connection/i)).not.toBeInTheDocument();
   });
+
+  // `step` defaults to 1, so without this a $4,275.29 adjustment is a stepMismatch and the browser
+  // refuses the form's submit. jsdom does not run interactive constraint validation, so the
+  // attribute is all a test here can see — the behaviour it guards is browser-side. Uses the REFUND
+  // fixture because it is the pending one, which is what renders Amount owed.
+  it('accepts cents on the amount and the amount owed', async () => {
+    renderDialog('a2');
+
+    await screen.findByDisplayValue('XYZ789');
+    expect(screen.getByLabelText('Adjustment amount')).toHaveAttribute('step', '0.01');
+    expect(screen.getByLabelText('Adjustment amount owed')).toHaveAttribute('step', '0.01');
+  });
 });

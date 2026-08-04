@@ -106,6 +106,7 @@ export function RecordPaymentDialog({ row, onOpenChange, queryKeyPrefix }: Recor
                 id="record-payment-amount-owed"
                 aria-label="Amount owed"
                 type="number"
+                step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="Amount owed"

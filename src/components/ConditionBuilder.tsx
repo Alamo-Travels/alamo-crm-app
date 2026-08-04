@@ -175,11 +175,16 @@ export default function ConditionBuilder({ fields, users, conditions, onChange }
     }
 
     switch (field.type) {
+      // `step="any"`, not the money fields' `0.01`: this input is registry-driven and renders
+      // whatever numeric field the backend offers. Both of them are money today (Amount, Amount
+      // owed), so the default step of 1 made "amount > 450.50" a stepMismatch — but a future
+      // non-money number field must not inherit a two-decimal constraint either.
       case 'number':
         return (
           <Input
             aria-label={label}
             type="number"
+            step="any"
             value={String(condition.value ?? 0)}
             onChange={(e) => setValue(index, Number(e.target.value))}
             className="w-36"

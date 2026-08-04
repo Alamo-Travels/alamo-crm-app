@@ -602,11 +602,16 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-foreground">
                 $
               </span>
+              {/* `step` defaults to 1 on a number input, so any cents value is a stepMismatch and
+                  the browser refuses the WHOLE form's submit — even here, where the field is never
+                  submitted. Every money field in this form carries `step="0.01"`; the split writes
+                  cents into the rows by design (leftover cents land on passenger 1). */}
               <Input
                 id="booking-total-amount"
                 aria-label="Total invoice amount"
                 type="number"
                 min="0"
+                step="0.01"
                 className="h-9 pl-6"
                 value={totalAmount}
                 onChange={(e) => handleTotalChange(e.target.value)}
@@ -761,6 +766,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
                 aria-label={index === 0 ? 'Amount' : `Amount ${index + 1}`}
                 type="number"
                 min="0"
+                step="0.01"
                 className="pl-6"
                 value={passenger.amount}
                 onChange={(e) => updatePassenger(index, { amount: e.target.value })}
@@ -832,6 +838,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
                     aria-label={pendingAmountLabel}
                     type="number"
                     min="0"
+                    step="0.01"
                     className="h-9 pl-6"
                     value={passenger.pendingAmount}
                     onChange={(e) => updatePassenger(index, { pendingAmount: e.target.value })}

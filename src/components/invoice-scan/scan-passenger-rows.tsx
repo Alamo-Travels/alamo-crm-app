@@ -265,6 +265,7 @@ export default function ScanPassengerRows({ invoice, onChange, resolver }: ScanP
               <Input
                 aria-label={`Amount for passenger ${index + 1}`}
                 type="number"
+                step="0.01"
                 className="pl-6"
                 value={passenger.amount ?? ''}
                 onChange={(e) => updateAmount(index, e.target.value)}

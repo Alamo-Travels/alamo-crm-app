@@ -730,6 +730,23 @@ describe('BookingsPage', () => {
       });
     });
 
+    // `step` defaults to 1, so without this a part-payment leaving $124.50 owed is a stepMismatch
+    // and the browser refuses this dialog's submit. jsdom does not run interactive constraint
+    // validation, so the attribute is all a test here can see.
+    it('accepts cents in the Record payment amount owed', async () => {
+      vi.spyOn(bookingsApi, 'listBookings').mockResolvedValue({
+        bookings: [{ ...BASE_ROW, id: 'p8', paymentStatus: 'pending', paymentAmount: 150, bookingType: 'New', bookingId: 'bk1' }],
+        total: 1, page: 1, pageSize: 25,
+      });
+      renderWithClient(<BookingsPage />);
+
+      await screen.findByText('0000150');
+      await userEvent.click(screen.getByRole('button', { name: /Row actions for/ }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Record payment' }));
+
+      expect(screen.getByLabelText('Amount owed')).toHaveAttribute('step', '0.01');
+    });
+
     it('routes a Reissue/Refund row to the passenger payment endpoint', async () => {
       vi.spyOn(bookingsApi, 'listBookings').mockResolvedValue({
         bookings: [{ ...BASE_ROW, id: 'p9', paymentStatus: 'pending', paymentAmount: 80, bookingType: 'Reissue', bookingId: undefined }],
