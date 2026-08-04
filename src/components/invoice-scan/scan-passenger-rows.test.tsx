@@ -27,6 +27,10 @@ const INVOICE: ReviewInvoice = {
   adjustmentIds: [null, null], adjustmentAmounts: [null, null],
 };
 
+/** The same invoice carrying a $30 service charge printed separately from the ticket fares, so the
+ *  passenger amounts (5,775.80) legitimately fall short of the printed total (5,805.80). */
+const SERVICE_CHARGE_INVOICE: ReviewInvoice = { ...INVOICE, netCcBilling: 5805.8 };
+
 beforeEach(() => {
   vi.mocked(customers.searchCustomers).mockReset();
   vi.mocked(customers.searchCustomers).mockResolvedValue([]);
@@ -69,6 +73,64 @@ describe('ScanPassengerRows', () => {
     render(<Harness initial={INVOICE} onChange={vi.fn()} />);
     expect(screen.getByDisplayValue('4275.29')).toBeInTheDocument();
     expect(screen.getByDisplayValue('1500.51')).toBeInTheDocument();
+  });
+
+  // The invoice's own printed NET CC BILLING was parsed all along (it gates the batch save via
+  // `reconciles`) but was never shown, so the operator had no reference to reconcile the
+  // per-passenger amounts against — and the scan-time issue text that reported a mismatch is a
+  // FROZEN snapshot that never updates as they edit.
+  it('shows the invoice total beside the live sum of the passenger amounts', () => {
+    render(<Harness initial={INVOICE} onChange={vi.fn()} />);
+    expect(screen.getByText('Passenger amounts').parentElement).toHaveTextContent('$5,775.80');
+    expect(screen.getByText(/invoice total/i).parentElement).toHaveTextContent('$5,775.80');
+  });
+
+  // The case this exists for: a service charge printed separately on the invoice, so the ticket
+  // amounts legitimately fall short of the total and the operator has to spread it across the
+  // passengers by hand.
+  it('reports how much of the invoice total is not yet on any passenger', () => {
+    render(<Harness initial={SERVICE_CHARGE_INVOICE} onChange={vi.fn()} />);
+    expect(screen.getByText(/\$30\.00 of the invoice total/i)).toBeInTheDocument();
+  });
+
+  it('shrinks the shortfall live as the operator spreads the charge across the passengers', async () => {
+    render(<Harness initial={SERVICE_CHARGE_INVOICE} onChange={vi.fn()} />);
+
+    const first = screen.getByLabelText('Amount for passenger 1');
+    await userEvent.clear(first);
+    await userEvent.type(first, '4290.29');
+
+    expect(screen.getByText(/\$15\.00 of the invoice total/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\$30\.00 of the invoice total/i)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a shortfall once the amounts reach the total', async () => {
+    render(<Harness initial={SERVICE_CHARGE_INVOICE} onChange={vi.fn()} />);
+
+    const first = screen.getByLabelText('Amount for passenger 1');
+    await userEvent.clear(first);
+    await userEvent.type(first, '4305.29');
+
+    expect(screen.queryByText(/of the invoice total/i)).not.toBeInTheDocument();
+  });
+
+  it('flags amounts that overshoot the invoice total', async () => {
+    render(<Harness initial={INVOICE} onChange={vi.fn()} />);
+
+    const first = screen.getByLabelText('Amount for passenger 1');
+    await userEvent.clear(first);
+    await userEvent.type(first, '4295.29');
+
+    expect(screen.getByText(/\$20\.00 more than the invoice total/i)).toBeInTheDocument();
+  });
+
+  // A total OCR could not read is null, not zero — claiming the whole invoice is unallocated would
+  // be a fabricated mismatch on an invoice that may be perfectly correct.
+  it('does not invent a mismatch when the invoice total could not be read', () => {
+    render(<Harness initial={{ ...INVOICE, netCcBilling: null }} onChange={vi.fn()} />);
+    expect(screen.getByText(/invoice total/i).parentElement).toHaveTextContent(/not read/i);
+    expect(screen.queryByText(/of the invoice total/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/more than the invoice total/i)).not.toBeInTheDocument();
   });
 
   it('auto-links a passenger when exactly one customer matches', async () => {

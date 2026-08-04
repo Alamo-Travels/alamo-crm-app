@@ -1,4 +1,29 @@
-import { ScannedInvoice } from '@/utils/invoiceScan/types';
+import { ScannedInvoice, ScannedPassenger } from '@/utils/invoiceScan/types';
+
+/** Half a cent — anything closer than this is float noise, not a real discrepancy. */
+const AMOUNT_TOLERANCE = 0.005;
+
+/** What the passengers currently add up to. A null (unread) amount counts as zero, matching what
+ *  `saveScannedInvoice` would actually write. */
+export function passengerAmountTotal(passengers: Pick<ScannedPassenger, 'amount'>[]): number {
+  return passengers.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+}
+
+/**
+ * Whether the passenger amounts agree with the invoice's own printed `NET CC BILLING`.
+ *
+ * Shared on purpose by the review screen's amounts summary (`ScanPassengerRows`) and the batch-save
+ * gate (`InvoiceScanPage`'s "Save all ready"): if the display applied its own rounding rule, an
+ * invoice could read as balanced on screen while the batch silently skipped it, or vice versa.
+ *
+ * An invoice with no `netCcBilling` on file has nothing to reconcile against and always passes —
+ * never treat a total OCR could not read as zero, which would report the entire invoice as
+ * unallocated.
+ */
+export function reconciles(invoice: Pick<ReviewInvoice, 'netCcBilling' | 'passengers'>): boolean {
+  if (invoice.netCcBilling === null) return true;
+  return Math.abs(passengerAmountTotal(invoice.passengers) - invoice.netCcBilling) <= AMOUNT_TOLERANCE;
+}
 
 /** `'duplicate'` is a SAVE-OUTCOME status, set by the page after a 409 `DUPLICATE_BOOKING_WARNING`
  * — like `'saved'`/`'failed'`, `statusFor` below never produces it. It exists so a duplicate hit

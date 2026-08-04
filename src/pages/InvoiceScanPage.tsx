@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import ScanInvoiceDetail, { ScanPageImage } from '@/components/invoice-scan/scan-invoice-detail';
 import ScanInvoiceList from '@/components/invoice-scan/scan-invoice-list';
-import { ReviewInvoice, ReviewStatus, statusFor } from '@/components/invoice-scan/reviewInvoice';
+import { ReviewInvoice, ReviewStatus, reconciles, statusFor } from '@/components/invoice-scan/reviewInvoice';
 import {
   SaveOutcome,
   ScanPaymentDefaults,
@@ -58,12 +58,11 @@ function canAttemptSave(invoice: ReviewInvoice): boolean {
  * — an operator who has actually opened this invoice and read the page image may legitimately
  * need to save it anyway (a real total can genuinely not match what OCR read); that override, kept
  * from fix round 2, stays available there. Only ever narrows the batch, never widens it: an invoice
- * with no `netCcBilling` on file (nothing to reconcile against) always reconciles. */
-function reconciles(invoice: ReviewInvoice): boolean {
-  if (invoice.netCcBilling === null) return true;
-  const total = invoice.passengers.reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  return Math.abs(total - invoice.netCcBilling) <= 0.005;
-}
+ * with no `netCcBilling` on file (nothing to reconcile against) always reconciles.
+ *
+ * The function itself now lives in `reviewInvoice.ts` and is SHARED with the amounts summary the
+ * operator reads in `ScanPassengerRows` — the two must apply the identical rule, or an invoice can
+ * look balanced on screen while the batch quietly skips it. */
 
 /**
  * Re-derives a row's status from its CURRENT data — but only for the statuses that are genuinely a

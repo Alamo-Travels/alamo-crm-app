@@ -12,7 +12,8 @@ import type { ScanResolver } from '@/utils/invoiceScan/resolve';
 import { ticketingName } from '@/utils/ticketingName';
 import { useAuthStore } from '@/stores/authStore';
 import { canCreateCustomers } from '@/utils/permissions';
-import { ReviewInvoice } from './reviewInvoice';
+import { formatUsd } from '@/utils/amountSplit';
+import { ReviewInvoice, passengerAmountTotal, reconciles } from './reviewInvoice';
 
 interface ScanPassengerRowsProps {
   invoice: ReviewInvoice;
@@ -135,6 +136,15 @@ export default function ScanPassengerRows({ invoice, onChange, resolver }: ScanP
     onChange({ ...invoice, customerIds: invoice.customerIds.map((id, i) => (i === index ? null : id)) });
     openSearch(index);
   }
+
+  const amountsTotal = passengerAmountTotal(invoice.passengers);
+  // Split into two one-sided values rather than a signed difference so each renders its own
+  // sentence. Both are null when the amounts agree with the total — or when the total could not
+  // be read at all, since `reconciles` treats an absent total as nothing to reconcile against
+  // (reporting the whole invoice as unallocated there would be a fabricated mismatch).
+  const difference = reconciles(invoice) || invoice.netCcBilling === null ? 0 : invoice.netCcBilling - amountsTotal;
+  const shortfall = difference > 0 ? difference : null;
+  const overshoot = difference < 0 ? -difference : null;
 
   function updateAmount(index: number, raw: string) {
     const amount = raw.trim() === '' ? null : Number(raw);
@@ -263,6 +273,37 @@ export default function ScanPassengerRows({ invoice, onChange, resolver }: ScanP
           </div>
         );
       })}
+
+      {/* The invoice's own printed total, purely as a REFERENCE to reconcile the amounts against —
+          it is never submitted and never stored (the per-passenger amounts are what get saved).
+          It exists because a real invoice often prints a service charge separately from the ticket
+          fares, so the amounts OCR reads off the ticket blocks legitimately fall short of the
+          total and the operator has to spread the difference across the passengers by hand.
+          Without the total on screen there was nothing to spread it against: the only report of a
+          mismatch was the scan-time `issues` text, which is a frozen snapshot that keeps quoting
+          the original figures no matter what the operator corrects. */}
+      <div className="space-y-1 rounded-md border bg-muted/30 p-2 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Passenger amounts</span>
+          <span className="font-medium">{formatUsd(amountsTotal)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Invoice total (NET CC BILLING)</span>
+          <span className="font-medium">
+            {invoice.netCcBilling === null ? 'Not read from the scan' : formatUsd(invoice.netCcBilling)}
+          </span>
+        </div>
+        {shortfall !== null && (
+          <p className="text-amber-600 dark:text-amber-500">
+            {formatUsd(shortfall)} of the invoice total is not on any passenger yet.
+          </p>
+        )}
+        {overshoot !== null && (
+          <p className="text-amber-600 dark:text-amber-500">
+            Passenger amounts are {formatUsd(overshoot)} more than the invoice total.
+          </p>
+        )}
+      </div>
 
       <AddEditCustomerDialog
         open={addCustomerOpen}
