@@ -12,13 +12,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   deleteEnquiry,
   ENQUIRY_STATUSES,
+  enquiryKind,
   EnquiryFareOption,
   EnquiryStatus,
   getEnquiry,
+  KIND_LABELS,
   STOPS_LABELS,
   updateEnquiry,
 } from '@/api/enquiries.api';
 import { EnquiryDialog } from '@/components/enquiries/enquiry-dialog';
+import { EnquirySourceBadge } from '@/components/enquiries/enquiry-source-badge';
 import { EnquiryStatusBadge } from '@/components/enquiries/enquiry-status-badge';
 import { FareOptionDialog } from '@/components/enquiries/fare-option-dialog';
 import { SendQuoteDialog } from '@/components/enquiries/send-quote-dialog';
@@ -190,21 +193,32 @@ export default function EnquiryDetailPage() {
             <span className="font-medium">Received:</span> {formatDisplayDate(enquiry.createdAt)}
           </p>
           <p>
-            <span className="font-medium">Route:</span> {formatItinerary(enquiry.trip.segments) || '—'}
-            {` (${
-              enquiry.trip.tripType === 'round'
-                ? 'Round trip'
-                : enquiry.trip.tripType === 'multicity'
-                  ? 'Multi-city'
-                  : 'One-way'
-            })`}
+            <span className="font-medium">Kind:</span> {KIND_LABELS[enquiryKind(enquiry)]}
           </p>
-          <p>
-            <span className="font-medium">Dates:</span> {formatSegmentDates(enquiry.trip.segments) || '—'}
-            {enquiry.trip.dateFlexibility && (
-              <span className="text-muted-foreground"> ({enquiry.trip.dateFlexibility})</span>
-            )}
-          </p>
+          {/* Route/Dates/trip-type only mean something for a flight enquiry — `buildTrip()`
+              (publicEnquiry.service.ts) omits `tripType`/`segments` for a tour or cruise, so
+              Mongoose's `default: 'round'`/`default: []` apply and this used to render the
+              fabricated claim "Route: — (Round trip)" for every non-flight enquiry. */}
+          {enquiryKind(enquiry) === 'flight' && (
+            <>
+              <p>
+                <span className="font-medium">Route:</span> {formatItinerary(enquiry.trip.segments) || '—'}
+                {` (${
+                  enquiry.trip.tripType === 'round'
+                    ? 'Round trip'
+                    : enquiry.trip.tripType === 'multicity'
+                      ? 'Multi-city'
+                      : 'One-way'
+                })`}
+              </p>
+              <p>
+                <span className="font-medium">Dates:</span> {formatSegmentDates(enquiry.trip.segments) || '—'}
+                {enquiry.trip.dateFlexibility && (
+                  <span className="text-muted-foreground"> ({enquiry.trip.dateFlexibility})</span>
+                )}
+              </p>
+            </>
+          )}
           <p>
             <span className="font-medium">Passengers:</span> {formatPax(enquiry.trip.pax) || '—'}
           </p>
@@ -228,6 +242,57 @@ export default function EnquiryDetailPage() {
               <span className="font-medium">Stops:</span> {STOPS_LABELS[enquiry.trip.stops]}
             </p>
           )}
+          {/* Tour/cruise detail — only the sub-document matching `kind` is ever populated, so a
+              flight enquiry (the overwhelming majority of records) renders neither block and this
+              card is byte-identical to before these fields existed. */}
+          {enquiryKind(enquiry) === 'tour' && enquiry.tour && (
+            <>
+              {enquiry.tour.tourName && (
+                <p>
+                  <span className="font-medium">Tour:</span> {enquiry.tour.tourName}
+                </p>
+              )}
+              {enquiry.tour.destination && (
+                <p>
+                  <span className="font-medium">Tour destination:</span> {enquiry.tour.destination}
+                </p>
+              )}
+              {enquiry.tour.preferredMonth && (
+                <p>
+                  <span className="font-medium">Preferred month:</span> {enquiry.tour.preferredMonth}
+                </p>
+              )}
+            </>
+          )}
+          {enquiryKind(enquiry) === 'cruise' && enquiry.cruise && (
+            <>
+              {enquiry.cruise.destination && (
+                <p>
+                  <span className="font-medium">Cruise destination:</span> {enquiry.cruise.destination}
+                </p>
+              )}
+              {enquiry.cruise.line && (
+                <p>
+                  <span className="font-medium">Cruise line:</span> {enquiry.cruise.line}
+                </p>
+              )}
+              {enquiry.cruise.ship && (
+                <p>
+                  <span className="font-medium">Ship:</span> {enquiry.cruise.ship}
+                </p>
+              )}
+              {enquiry.cruise.when && (
+                <p>
+                  <span className="font-medium">When:</span> {enquiry.cruise.when}
+                </p>
+              )}
+              {enquiry.cruise.isGroup && (
+                <p>
+                  <span className="font-medium">Group booking:</span> 50+ passengers
+                </p>
+              )}
+            </>
+          )}
           <p>
             <span className="font-medium">Quote sent:</span>{' '}
             {enquiry.quoteSentAt ? formatDisplayDate(enquiry.quoteSentAt) : '—'}
@@ -237,8 +302,9 @@ export default function EnquiryDetailPage() {
               <span className="font-medium">Notes:</span> {enquiry.notes}
             </p>
           )}
-          <div>
+          <div className="flex items-center gap-2">
             <EnquiryStatusBadge status={enquiry.status} />
+            <EnquirySourceBadge source={enquiry.source} />
           </div>
         </CardContent>
       </Card>

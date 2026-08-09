@@ -117,6 +117,112 @@ describe('EnquiryDetailPage', () => {
     expect(screen.queryByText(/Infant/)).not.toBeInTheDocument();
   });
 
+  // --- Enquiry kinds + website provenance badge (2026-08-08) ---
+
+  it('a flight enquiry (kind absent) renders no cruise/tour fields and no website badge', async () => {
+    // ENQUIRY has no `kind`, `tour`, `cruise`, or `source` — the shape every pre-existing
+    // enquiry has. The regression guard: nothing new should render for it.
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.queryByText(/Cruise destination/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cruise line/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Ship:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Tour:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Tour destination/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Preferred month/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Website')).not.toBeInTheDocument();
+  });
+
+  it('shows the website badge for a website-sourced enquiry', async () => {
+    vi.spyOn(enquiriesApi, 'getEnquiry').mockResolvedValue({ ...ENQUIRY, source: 'website' });
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+    expect(screen.getByText('Website')).toBeInTheDocument();
+  });
+
+  it('renders cruise fields for a cruise enquiry', async () => {
+    vi.spyOn(enquiriesApi, 'getEnquiry').mockResolvedValue({
+      ...ENQUIRY,
+      kind: 'cruise',
+      cruise: { destination: 'Alaska', line: 'Carnival', ship: 'Carnival Spirit', when: 'Flexible', isGroup: true },
+    });
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.getByText('Alaska')).toBeInTheDocument();
+    expect(screen.getByText('Carnival')).toBeInTheDocument();
+    expect(screen.getByText('Carnival Spirit')).toBeInTheDocument();
+    expect(screen.getByText('Flexible')).toBeInTheDocument();
+    expect(screen.getByText(/50\+ passengers/)).toBeInTheDocument();
+    // No tour fields on a cruise enquiry.
+    expect(screen.queryByText(/^Tour:/)).not.toBeInTheDocument();
+  });
+
+  it('renders tour fields for a tour enquiry', async () => {
+    vi.spyOn(enquiriesApi, 'getEnquiry').mockResolvedValue({
+      ...ENQUIRY,
+      kind: 'tour',
+      tour: { tourName: 'Holy Land Pilgrimage', destination: 'Jordan', preferredMonth: 'March' },
+    });
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.getByText('Holy Land Pilgrimage')).toBeInTheDocument();
+    expect(screen.getByText('Jordan')).toBeInTheDocument();
+    expect(screen.getByText('March')).toBeInTheDocument();
+    // No cruise fields on a tour enquiry.
+    expect(screen.queryByText(/Cruise destination/)).not.toBeInTheDocument();
+  });
+
+  // final-review Minor 3 (2026-08-08): `buildTrip()` omits `tripType`/`segments` for a
+  // non-flight kind, so Mongoose's `default: 'round'`/`default: []` apply — a REAL cruise
+  // or tour enquiry from the website carries exactly this shape (empty segments, tripType
+  // 'round'), not the flight-shaped fixture the two tests above reuse for convenience.
+  it('a cruise enquiry with no itinerary does not claim to be a round trip, and states its kind', async () => {
+    vi.spyOn(enquiriesApi, 'getEnquiry').mockResolvedValue({
+      ...ENQUIRY,
+      kind: 'cruise',
+      trip: { tripType: 'round', segments: [], pax: { adults: 50, children: 0, infants: 0 }, cabins: [], preferredAirlines: [] },
+      cruise: { destination: 'Alaska', isGroup: true },
+    });
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.getByText('Kind:')).toBeInTheDocument();
+    expect(screen.getByText('Cruise')).toBeInTheDocument();
+    // The bug: this used to render "Route: — (Round trip)" for every non-flight kind.
+    expect(screen.queryByText('Route:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dates:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Round trip/)).not.toBeInTheDocument();
+  });
+
+  it('a tour enquiry with no fields filled in still states its kind, distinguishing it from a flight enquiry', async () => {
+    vi.spyOn(enquiriesApi, 'getEnquiry').mockResolvedValue({
+      ...ENQUIRY,
+      kind: 'tour',
+      trip: { tripType: 'round', segments: [], pax: { adults: 2, children: 0, infants: 0 }, cabins: [], preferredAirlines: [] },
+      tour: {},
+    });
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.getByText('Kind:')).toBeInTheDocument();
+    expect(screen.getByText('Tour')).toBeInTheDocument();
+    expect(screen.queryByText('Route:')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Round trip/)).not.toBeInTheDocument();
+  });
+
+  it('a flight enquiry states its kind as Flight and still shows Route/Dates', async () => {
+    renderWithClient(<EnquiryDetailPage />);
+    await screen.findByText('Johny Smith');
+
+    expect(screen.getByText('Kind:')).toBeInTheDocument();
+    expect(screen.getByText('Flight')).toBeInTheDocument();
+    expect(screen.getByText('Route:')).toBeInTheDocument();
+    expect(screen.getByText(/Round trip/)).toBeInTheDocument();
+  });
+
   it('changes status via the status select (PATCH)', async () => {
     const update = vi.spyOn(enquiriesApi, 'updateEnquiry').mockResolvedValue({ ...ENQUIRY, status: 'Booked' });
     renderWithClient(<EnquiryDetailPage />);

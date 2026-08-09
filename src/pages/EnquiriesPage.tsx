@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/search-input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { ENQUIRY_PAGE_SIZES, ENQUIRY_STATUSES, EnquiryStatus, listEnquiries } from '@/api/enquiries.api';
+import { ENQUIRY_PAGE_SIZES, ENQUIRY_STATUSES, EnquiryStatus, KIND_LABELS, enquiryKind, listEnquiries } from '@/api/enquiries.api';
 import { EnquiryDialog } from '@/components/enquiries/enquiry-dialog';
+import { EnquirySourceBadge } from '@/components/enquiries/enquiry-source-badge';
 import { EnquiryStatusBadge } from '@/components/enquiries/enquiry-status-badge';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { DataTableFacetedFilter } from '@/components/data-table/data-table-faceted-filter';
@@ -18,7 +19,7 @@ import { formatItinerary, formatPax, formatSegmentDates } from '@/utils/tripForm
 
 const STATUS_OPTIONS = ENQUIRY_STATUSES.map((s) => ({ label: s, value: s }));
 
-const HEADERS = ['Date received', 'Enquirer', 'Phone', 'Route', 'Travel dates', 'Pax', 'Status', 'Quote sent'];
+const HEADERS = ['Date received', 'Enquirer', 'Kind', 'Phone', 'Route', 'Travel dates', 'Pax', 'Status', 'Quote sent'];
 
 export default function EnquiriesPage() {
   const navigate = useNavigate();
@@ -103,6 +104,9 @@ export default function EnquiriesPage() {
                     {enquiry.enquirer.name}
                   </TableCell>
                   <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
+                    {KIND_LABELS[enquiryKind(enquiry)]}
+                  </TableCell>
+                  <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
                     {formatPhone(enquiry.enquirer.phone)}
                   </TableCell>
                   <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
@@ -118,7 +122,10 @@ export default function EnquiriesPage() {
                     {formatPax(enquiry.trip.pax)}
                   </TableCell>
                   <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
-                    <EnquiryStatusBadge status={enquiry.status} />
+                    <div className="flex items-center gap-1">
+                      <EnquiryStatusBadge status={enquiry.status} />
+                      <EnquirySourceBadge source={enquiry.source} />
+                    </div>
                   </TableCell>
                   <TableCell className={cn('whitespace-nowrap', COMPACT_CELL_CLASS)}>
                     {enquiry.quoteSentAt ? formatDisplayDate(enquiry.quoteSentAt) : '—'}

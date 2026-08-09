@@ -70,6 +70,42 @@ describe('EnquiriesPage', () => {
     expect(screen.getByText('2 ADT, 1 CHD')).toBeInTheDocument();
   });
 
+  it('shows Flight for an enquiry with no kind (defaults, not an error state)', async () => {
+    renderWithClient(<EnquiriesPage />);
+    expect(await screen.findByText('Flight')).toBeInTheDocument();
+  });
+
+  it("shows an enquiry's kind — Tour and Cruise", async () => {
+    vi.spyOn(enquiriesApi, 'listEnquiries').mockResolvedValue({
+      enquiries: [
+        { ...ENQUIRY, id: 'e2', kind: 'tour' },
+        { ...ENQUIRY, id: 'e3', enquirer: { ...ENQUIRY.enquirer, name: 'Cruise Caller' }, kind: 'cruise' },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 25,
+    });
+    renderWithClient(<EnquiriesPage />);
+    expect(await screen.findByText('Tour')).toBeInTheDocument();
+    expect(screen.getByText('Cruise')).toBeInTheDocument();
+  });
+
+  it('shows the website badge only for a website-sourced enquiry, nothing for one with no source', async () => {
+    vi.spyOn(enquiriesApi, 'listEnquiries').mockResolvedValue({
+      enquiries: [
+        { ...ENQUIRY, id: 'e1', source: 'website' },
+        { ...ENQUIRY, id: 'e2', enquirer: { ...ENQUIRY.enquirer, name: 'No Source Caller' } },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 25,
+    });
+    renderWithClient(<EnquiriesPage />);
+    await screen.findByText('Johny Smith');
+    // Exactly one "Website" badge, for the website-sourced row only.
+    expect(screen.getAllByText('Website')).toHaveLength(1);
+  });
+
   it('debounces the search box into a server-side q param', async () => {
     renderWithClient(<EnquiriesPage />);
     await userEvent.type(screen.getByLabelText('Search enquiries'), 'johny');

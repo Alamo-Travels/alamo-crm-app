@@ -14,7 +14,11 @@ export const DRAFT_KEY_PREFIX = 'alamo-draft:v1:';
  * change often in this repo (per-passenger payment moved off the booking header; the passenger field
  * became a strict customer picker), so this is a live concern, not a formality.
  */
-export const DRAFT_SCHEMA_VERSION = 1;
+// Bumped 1 -> 2 (2026-08-08): EnquiryFormState grew `kind`/tour/cruise fields — see
+// enquiry-dialog.tsx. A v1 draft predates the Kind selector and has no `kind` key at all, which
+// would restore `form.kind` as `undefined` (breaking the RadioGroup's controlled value and the
+// tour/cruise conditionals); discarding it is correct, per the rule above.
+export const DRAFT_SCHEMA_VERSION = 2;
 
 export const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 

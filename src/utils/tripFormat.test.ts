@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatItinerary, formatPax, formatSegmentDates } from './tripFormat';
+import { formatItinerary, formatPax, formatSegmentDates, isGroupBookingSize } from './tripFormat';
 
 describe('formatItinerary', () => {
   it('collapses the shared airport between consecutive legs', () => {
@@ -51,5 +51,19 @@ describe('formatSegmentDates', () => {
 
   it('ignores undated legs', () => {
     expect(formatSegmentDates([{ from: 'IAH', to: 'COK' }])).toBe('');
+  });
+});
+
+describe('isGroupBookingSize', () => {
+  it('is false below the threshold', () => {
+    expect(isGroupBookingSize({ adults: 40, children: 8, infants: 1 })).toBe(false);
+  });
+
+  it('is true exactly at the threshold', () => {
+    expect(isGroupBookingSize({ adults: 50, children: 0, infants: 0 })).toBe(true);
+  });
+
+  it('is true above the threshold, summing every pax type', () => {
+    expect(isGroupBookingSize({ adults: 30, children: 15, infants: 6 })).toBe(true);
   });
 });

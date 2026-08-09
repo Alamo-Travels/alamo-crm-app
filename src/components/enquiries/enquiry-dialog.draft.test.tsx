@@ -58,6 +58,7 @@ describe('EnquiryDialog drafts', () => {
       name: 'Drafted Enquirer',
       phone: '',
       email: '',
+      kind: 'flight',
       tripType: 'round',
       segments: [
         { from: '', to: '', date: '' },
@@ -70,6 +71,15 @@ describe('EnquiryDialog drafts', () => {
       preferredAirlines: [],
       stops: 'any',
       notes: '',
+      tourRef: undefined,
+      tourName: '',
+      tourDestination: '',
+      tourPreferredMonth: '',
+      cruiseDestination: '',
+      cruiseLine: '',
+      cruiseShip: '',
+      cruiseWhen: '',
+      cruiseIsGroup: false,
     });
 
     renderDialog();
@@ -88,6 +98,7 @@ describe('EnquiryDialog drafts', () => {
       name: 'Drafted Enquirer',
       phone: '',
       email: '',
+      kind: 'flight',
       tripType: 'round',
       segments: [
         { from: '', to: '', date: '' },
@@ -100,6 +111,15 @@ describe('EnquiryDialog drafts', () => {
       preferredAirlines: [],
       stops: 'nonstop',
       notes: 'Prefers morning flights',
+      tourRef: undefined,
+      tourName: '',
+      tourDestination: '',
+      tourPreferredMonth: '',
+      cruiseDestination: '',
+      cruiseLine: '',
+      cruiseShip: '',
+      cruiseWhen: '',
+      cruiseIsGroup: false,
     });
 
     renderDialog();

@@ -47,6 +47,17 @@ export function formatSegmentDates(segments: EnquiryTripSegment[]): string {
     .join(' – ');
 }
 
+/** The website's own `PayloadMapper` treats a party of 50+ as a group booking (`cruises.md` §1);
+ * the staff Enquiry dialog's Cruise "Group booking" checkbox auto-ticks at the same threshold so
+ * a phone-taken enquiry and a website one are judged the same way. Pure and exported so this rule
+ * is unit-testable without driving the Passengers popover it reads from — that popover is nested
+ * inside a modal Dialog, which jsdom cannot render (see passenger-count-field.test.tsx). */
+export const GROUP_BOOKING_THRESHOLD = 50;
+
+export function isGroupBookingSize(pax: EnquiryPax): boolean {
+  return pax.adults + pax.children + pax.infants >= GROUP_BOOKING_THRESHOLD;
+}
+
 /** 'Adult USD220.00 · Child USD180.00' — only the pax types actually quoted. Shared by the
  * enquiry detail page and the send-quote preview so the two cannot drift apart. */
 export function farePriceSummary(option: EnquiryFareOption): string {
