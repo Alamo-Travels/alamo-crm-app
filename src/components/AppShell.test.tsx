@@ -9,6 +9,15 @@ import * as authApi from '../api/auth.api';
 import * as organizationApi from '../api/organization.api';
 import { clearAllDrafts, readDraft, writeDraft } from '../utils/formDraft';
 
+// AppShell now mounts useEnquiryNotifications(), which calls connectRealtime()/getSocket() from a
+// real socket.io-client — without this mock every test here would attempt a real socket connection
+// in jsdom (AggregateError noise, no server to connect to).
+vi.mock('../api/realtime', () => ({
+  getSocket: () => ({ on: vi.fn(), off: vi.fn(), connected: false }),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
+}));
+
 function renderAuthedApp(initialPath: string) {
   useAuthStore.setState({
     accessToken: 't',

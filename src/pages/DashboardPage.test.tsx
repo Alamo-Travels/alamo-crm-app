@@ -10,6 +10,15 @@ import { useAuthStore } from '../stores/authStore';
 import * as widgetsApi from '../api/widgets.api';
 import * as usersApi from '../api/users.api';
 
+// AppShell now mounts useEnquiryNotifications(), which calls connectRealtime()/getSocket() from a
+// real socket.io-client — without this mock every test here would attempt a real socket connection
+// in jsdom (AggregateError noise, no server to connect to).
+vi.mock('../api/realtime', () => ({
+  getSocket: () => ({ on: vi.fn(), off: vi.fn(), connected: false }),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
+}));
+
 function renderAtDashboard() {
   const router = createAppRouter(createMemoryHistory({ initialEntries: ['/dashboard'] }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

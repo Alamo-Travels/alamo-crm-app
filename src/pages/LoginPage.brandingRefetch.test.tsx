@@ -8,6 +8,16 @@ import { useAuthStore, UserPermissions } from '../stores/authStore';
 import * as authApi from '../api/auth.api';
 import * as organizationApi from '../api/organization.api';
 
+// The test below signs in and lands on /dashboard, which mounts AppShell — which now calls
+// useEnquiryNotifications() → connectRealtime()/getSocket() from a real socket.io-client. Without
+// this mock that would attempt a real socket connection in jsdom (AggregateError noise, no server
+// to connect to).
+vi.mock('../api/realtime', () => ({
+  getSocket: () => ({ on: vi.fn(), off: vi.fn(), connected: false }),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
+}));
+
 const PERMISSIONS: UserPermissions = {
   bookings: { create: false, edit: false, delete: false, createAdjustment: false, viewAll: false, import: false, export: false, sendInvoice: false },
   customers: { create: false, edit: false, delete: false, viewPassport: false, import: false, export: false },

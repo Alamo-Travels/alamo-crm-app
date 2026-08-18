@@ -1,4 +1,5 @@
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import {
   Sidebar,
   SidebarContent,
@@ -7,6 +8,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -23,8 +25,11 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { canViewSalesReports, canManageUsers, canViewAudit, ROLE_LABELS } from '../utils/permissions';
 import { logoutRequest } from '../api/auth.api';
+import { getUnreadEnquiryCount } from '../api/enquiries.api';
+import { disconnectRealtime } from '../api/realtime';
 import { useBranding } from '@/hooks/useBranding';
 import { useApplyTheme } from '../hooks/useApplyTheme';
+import { useEnquiryNotifications } from '../hooks/useEnquiryNotifications';
 import { ThemeMenuItems } from './theme-toggle';
 import { clearAllDrafts } from '@/utils/formDraft';
 
@@ -37,7 +42,15 @@ export default function AppShell() {
   const showAudit = canViewAudit(user);
   const branding = useBranding();
   useApplyTheme();
+  useEnquiryNotifications();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { data: unreadEnquiries = 0 } = useQuery({
+    queryKey: ['enquiries', 'unread-count'],
+    queryFn: getUnreadEnquiryCount,
+    // A missed socket event self-heals on refocus — the socket is only the trigger, this query is
+    // the truth (see the spec §3.3).
+    refetchOnWindowFocus: true,
+  });
 
   function isActive(path: string): boolean {
     return pathname === path || pathname.startsWith(`${path}/`);
@@ -53,6 +66,9 @@ export default function AppShell() {
       // Ignore — local session is cleared and the user is navigated away regardless.
     } finally {
       if (signingOutUserId) clearAllDrafts(signingOutUserId);
+      // The session is revoked server-side by logoutRequest above; close the socket too, or it
+      // would outlive that revocation on a still-unexpired access token.
+      disconnectRealtime();
       clearSession();
       await router.navigate({ to: '/login' });
     }
@@ -112,8 +128,31 @@ export default function AppShell() {
                   <Link to="/enquiries">
                     <MessageSquareText />
                     <span>Enquiries</span>
+                    {/* The count belongs in the LINK's accessible name, not only in the visual
+                        badge — the badge is a sibling of the button, so a screen reader would
+                        otherwise never associate the two. The visual badge is aria-hidden to stop
+                        it being announced twice. */}
+                    {unreadEnquiries > 0 && <span className="sr-only">, {unreadEnquiries} new</span>}
                   </Link>
                 </SidebarMenuButton>
+                {unreadEnquiries > 0 && (
+                  <>
+                    <SidebarMenuBadge
+                      aria-hidden
+                      data-testid="enquiries-unread-badge"
+                      className="bg-sidebar-primary text-sidebar-primary-foreground"
+                    >
+                      {unreadEnquiries}
+                    </SidebarMenuBadge>
+                    {/* SidebarMenuBadge carries group-data-[collapsible=icon]:hidden (vendor file,
+                        not hand-edited), so a collapsed sidebar would show NOTHING. This dot takes
+                        over at icon size so a collapsed sidebar still signals that work is waiting. */}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute right-1.5 top-1.5 hidden size-2 rounded-full bg-sidebar-primary group-data-[collapsible=icon]:block"
+                    />
+                  </>
+                )}
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton

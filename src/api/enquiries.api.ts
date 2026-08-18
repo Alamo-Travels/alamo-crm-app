@@ -219,3 +219,9 @@ export async function sendEnquiryQuote(
   const res = await apiClient.post<{ sent: boolean }>(`/enquiries/${id}/send-quote`, input);
   return res.data;
 }
+
+/** The number of website enquiries nobody has actioned yet — see the API's countNewWebsiteEnquiries. */
+export async function getUnreadEnquiryCount(): Promise<number> {
+  const res = await apiClient.get<{ count: number }>('/enquiries/unread-count');
+  return res.data.count;
+}

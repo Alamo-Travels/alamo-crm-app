@@ -9,6 +9,16 @@ import { useAuthStore } from '../stores/authStore';
 import * as authApi from '../api/auth.api';
 import * as organizationApi from '../api/organization.api';
 
+// A successful login below navigates to /dashboard, which mounts AppShell — which now calls
+// useEnquiryNotifications() → connectRealtime()/getSocket() from a real socket.io-client. Without
+// this mock that test would attempt a real socket connection in jsdom (AggregateError noise, no
+// server to connect to).
+vi.mock('../api/realtime', () => ({
+  getSocket: () => ({ on: vi.fn(), off: vi.fn(), connected: false }),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
+}));
+
 function renderAtLogin() {
   const router = createAppRouter(createMemoryHistory({ initialEntries: ['/login'] }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

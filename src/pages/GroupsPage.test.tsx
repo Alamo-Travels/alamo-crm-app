@@ -7,6 +7,15 @@ import { createAppRouter } from '../router';
 import { useAuthStore } from '../stores/authStore';
 import * as groupsApi from '../api/groups.api';
 
+// AppShell now mounts useEnquiryNotifications(), which calls connectRealtime()/getSocket() from a
+// real socket.io-client — without this mock every test here would attempt a real socket connection
+// in jsdom (AggregateError noise, no server to connect to).
+vi.mock('../api/realtime', () => ({
+  getSocket: () => ({ on: vi.fn(), off: vi.fn(), connected: false }),
+  connectRealtime: vi.fn(),
+  disconnectRealtime: vi.fn(),
+}));
+
 function renderAtGroups() {
   const router = createAppRouter(createMemoryHistory({ initialEntries: ['/groups'] }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
