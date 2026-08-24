@@ -20,6 +20,7 @@ const ADJUSTMENT: ReviewInvoice = {
   airlineCode: 'EY', depCity: 'ATL', arrCity: 'COK',
   remark: null,
   arrDateChoice: 'return', customerIds: ['c1'], parentPassengerIds: [null], adjustmentIds: [null],
+  originalPnr: 'MHNGLM',
   adjustmentAmounts: [null],
 };
 
@@ -310,7 +311,16 @@ describe('ScanAdjustmentParent', () => {
         const [invoice, setInvoice] = useState(initial);
         return (
           <>
-            <button type="button" onClick={() => setInvoice((inv) => ({ ...inv, pnr: nextPnr }))}>
+            <button
+              type="button"
+              onClick={() =>
+                setInvoice((inv) => ({
+                  ...inv,
+                  pnr: nextPnr,
+                  originalPnr: inv.originalPnr === inv.pnr ? nextPnr : inv.originalPnr,
+                }))
+              }
+            >
               Correct PNR
             </button>
             <ScanAdjustmentParent
@@ -459,5 +469,132 @@ describe('ScanAdjustmentParent', () => {
         expect(lastCall.parentPassengerIds).toEqual(['p9']);
       });
     });
+  });
+});
+
+/** A New row on a DIFFERENT PNR from the scan's, carrying full trip details to prefill from. */
+const OTHER_PNR_ROW: bookings.BookingRow = {
+  id: 'p9', bookingDate: '2026-06-01', invoiceNumber: '0000255',
+  passengerName: 'Jacob/Shibin Thomas', amount: 1800.29, pnr: 'CNRAPN', bookingType: 'New',
+  airlineCode: 'QR', depCity: 'IAH', arrCity: 'COK',
+  depDate: '2026-01-16', arrDate: '2026-02-07',
+};
+
+/** Controlled like `renderControlled`, but also records every `onChange` payload — needed by the
+ * prefill test, which asserts on the object the component hands back, not just what it renders. */
+function renderControlledSpy(initial: ReviewInvoice) {
+  const seen: ReviewInvoice[] = [];
+  function Harness() {
+    const [invoice, setInvoice] = useState(initial);
+    return (
+      <ScanAdjustmentParent
+        invoice={invoice}
+        onChange={(next) => {
+          seen.push(next);
+          setInvoice(next);
+        }}
+      />
+    );
+  }
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <Harness />
+    </QueryClientProvider>
+  );
+  return seen;
+}
+
+describe('ScanAdjustmentParent — searchable original PNR', () => {
+  /** Only `CNRAPN` exists in the ledger; the scan's misread `CNRAPM` finds nothing, and a partial
+   *  prefix finds it the way the backend's substring `q` search would. */
+  function onlyCnrapn() {
+    vi.mocked(bookings.listBookings).mockImplementation(async (params) => {
+      const query = (params?.q ?? '').toUpperCase();
+      return query.length >= 3 && 'CNRAPN'.startsWith(query)
+        ? { bookings: [OTHER_PNR_ROW], total: 1, page: 1, pageSize: 50 }
+        : { bookings: [], total: 0, page: 1, pageSize: 50 };
+    });
+  }
+
+  it('seeds the Original PNR search from the scanned PNR', async () => {
+    vi.mocked(bookings.listBookings).mockResolvedValue({ bookings: [ROW], total: 1, page: 1, pageSize: 50 });
+    renderComponent(ADJUSTMENT, vi.fn());
+
+    expect(await screen.findByLabelText(/original pnr/i)).toHaveValue('MHNGLM');
+  });
+
+  it('resolves the original once the operator types the correct PNR in full', async () => {
+    onlyCnrapn();
+    renderControlledSpy({ ...ADJUSTMENT, pnr: 'CNRAPM', originalPnr: 'CNRAPM' });
+
+    const search = await screen.findByLabelText(/original pnr/i);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'CNRAPN');
+
+    expect(
+      await screen.findByText(/original passenger resolved/i, undefined, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
+  it('offers the bookings it finds when the typed PNR is only partial', async () => {
+    onlyCnrapn();
+    renderControlledSpy({ ...ADJUSTMENT, pnr: 'CNRAPM', originalPnr: 'CNRAPM' });
+
+    const search = await screen.findByLabelText(/original pnr/i);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'CNRAP');
+
+    expect(
+      await screen.findByRole('button', { name: /CNRAPN.*0000255/i }, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
+  it('fills only the trip fields the scan could not read, and never overwrites one it did', async () => {
+    onlyCnrapn();
+    // airlineCode/depCity were read by OCR; arrCity and both dates were not.
+    const seen = renderControlledSpy({
+      ...ADJUSTMENT,
+      pnr: 'CNRAPM', originalPnr: 'CNRAPM',
+      airlineCode: 'EY', depCity: 'ATL', arrCity: null,
+      depDate: null, arrDateReturn: null, arrDateFinal: null,
+    });
+
+    const search = await screen.findByLabelText(/original pnr/i);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'CNRAP');
+    await userEvent.click(await screen.findByRole('button', { name: /CNRAPN.*0000255/i }, { timeout: 3000 }));
+
+    const picked = seen[seen.length - 1];
+    expect(picked.originalPnr).toBe('CNRAPN');
+    // Untouched — OCR read these.
+    expect(picked.airlineCode).toBe('EY');
+    expect(picked.depCity).toBe('ATL');
+    // Filled — OCR read nothing.
+    expect(picked.arrCity).toBe('COK');
+    // A PAST date is kept, unlike adjustment-booking-form's futureOnly(): a scan is historic.
+    expect(picked.depDate).toBe('2026-01-16');
+    expect(picked.arrDateReturn).toBe('2026-02-07');
+    // The reissue's OWN pnr is what gets POSTed as the adjustment's pnr — it must survive.
+    expect(picked.pnr).toBe('CNRAPM');
+  });
+
+  it('drops a resolved parent when the operator edits the original PNR away from it', async () => {
+    vi.mocked(bookings.listBookings).mockImplementation(async (params) =>
+      params?.q === 'MHNGLM'
+        ? { bookings: [ROW], total: 1, page: 1, pageSize: 50 }
+        : { bookings: [], total: 0, page: 1, pageSize: 50 }
+    );
+    renderControlled({ ...ADJUSTMENT, parentPassengerIds: ['p1'] });
+
+    expect(await screen.findByText(/original passenger resolved/i)).toBeInTheDocument();
+
+    const search = screen.getByLabelText(/original pnr/i);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'ZZZZZZ');
+
+    await waitFor(
+      () => expect(screen.queryByText(/original passenger resolved/i)).not.toBeInTheDocument(),
+      { timeout: 3000 }
+    );
   });
 });

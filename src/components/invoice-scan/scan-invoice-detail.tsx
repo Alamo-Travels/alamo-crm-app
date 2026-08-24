@@ -25,6 +25,24 @@ import { ReviewInvoice } from './reviewInvoice';
 import ScanAdjustmentParent from './scan-adjustment-parent';
 import ScanPassengerRows from './scan-passenger-rows';
 
+/**
+ * Edits the scanned PNR, carrying `originalPnr` along with it WHILE THE TWO STILL AGREE.
+ *
+ * The two fields are deliberately separate (see `ReviewInvoice.originalPnr`): `pnr` is what gets
+ * POSTed on the adjustment, `originalPnr` is only which booking to attach it to. But they are
+ * seeded identically and are the same value on the overwhelmingly common reissue, so an operator
+ * correcting an OCR misread here plainly means both — leaving `originalPnr` behind would keep
+ * looking the parent up under the character they just fixed.
+ *
+ * Once the operator has deliberately pointed `originalPnr` somewhere else (a reissue ticketed
+ * under a NEW PNR), the two no longer agree and this stops touching it — otherwise editing the
+ * new PNR would silently destroy the original link they went to the trouble of searching for.
+ */
+function withPnr(invoice: ReviewInvoice, pnr: string): ReviewInvoice {
+  const linked = invoice.originalPnr === invoice.pnr;
+  return { ...invoice, pnr, originalPnr: linked ? pnr : invoice.originalPnr };
+}
+
 /** One rendered page of the uploaded PDF, carrying its own 1-based page number. */
 export interface ScanPageImage {
   pageNumber: number;
@@ -310,7 +328,7 @@ export default function ScanInvoiceDetail({ invoice, pageImages, onChange, resol
               aria-label="PNR"
               icon={<Ticket />}
               value={invoice.pnr ?? ''}
-              onChange={(e) => onChange({ ...invoice, pnr: e.target.value })}
+              onChange={(e) => onChange(withPnr(invoice, e.target.value))}
             />
           </div>
         </div>

@@ -19,6 +19,7 @@ const INVOICE: ReviewInvoice = {
   remark: null,
   arrDateChoice: 'return', customerIds: ['c1'], parentPassengerIds: ['p1'], adjustmentIds: [null],
   adjustmentAmounts: [null],
+  originalPnr: null,
 };
 
 const ADJUSTMENT: ReviewInvoice = { ...INVOICE, type: 'Reissue' };
@@ -241,6 +242,7 @@ describe('saveScannedAdjustment', () => {
       parentPassengerIds: ['p1', 'p2'],
       adjustmentIds: [null, null],
       adjustmentAmounts: [null, null],
+      originalPnr: null,
     };
 
     await saveScannedAdjustment(multi, PAYMENT);
@@ -268,6 +270,7 @@ describe('saveScannedAdjustment', () => {
       // exactly the state InvoiceScanPage persists via `saveScannedAdjustment`'s `onProgress`.
       adjustmentIds: ['a1', null],
       adjustmentAmounts: [100, null],
+      originalPnr: null,
     };
 
     const outcome = await saveScannedAdjustment(retryInvoice, PAYMENT);
@@ -294,6 +297,7 @@ describe('saveScannedAdjustment', () => {
       parentPassengerIds: ['p1', 'p2'],
       adjustmentIds: [null, null],
       adjustmentAmounts: [null, null],
+      originalPnr: null,
     };
 
     const outcome = await saveScannedAdjustment(multi, PAYMENT, onProgress);

@@ -12,7 +12,7 @@ vi.mock('@/api/customers.api');
 
 const INVOICE: ReviewInvoice = {
   id: 'scan-0', status: 'attention', pageStart: 1, pageEnd: 1, type: 'New',
-  invoiceNumber: '0000249', bookingDate: '2026-07-31', pnr: 'MHNGLM',
+  invoiceNumber: '0000249', bookingDate: '2026-07-31', pnr: 'MHNGLM', originalPnr: 'MHNGLM',
   passengers: [
     { name: 'JACOB/SHIBIN THOMAS', child: false, amount: 4275.29, ticketNumber: 'EY1', confidence: 96 },
     { name: 'PAUL/MICHAELA ROSE', child: true, amount: 1500.51, ticketNumber: 'EY2', confidence: 96 },

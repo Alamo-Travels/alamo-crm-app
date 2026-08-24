@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookingRow, listBookings } from '@/api/bookings.api';
@@ -51,7 +52,7 @@ interface ScanAdjustmentParentProps {
  * data]`), never when `parentPassengerIds` does — so a cleared row stays genuinely open for an explicit
  * re-pick instead of silently snapping back to whatever was just cleared. Because each row's
  * candidate list is recomputed from the CURRENT `parentPassengerIds` on every render, the
- * "never claimed twice" invariant holds automatically through any number of Change→re-pick cycles
+ * "never claimed twice" invariant holds automatically through any number of Changeâ†’re-pick cycles
  * — reopening one row can never let it steal an id another row still holds.
  *
  * **Fix round 3: a resolved parent no longer survives a PNR correction.** The scenario: the
@@ -103,10 +104,20 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // The search box holds NO state of its own — its value IS `invoice.originalPnr`. Shadowing it in
+  // local state would silently diverge the moment something else edits `originalPnr`, which
+  // `scan-invoice-detail.tsx` does whenever the operator corrects the scanned PNR itself.
+  const search = invoice.originalPnr ?? '';
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data, isError } = useQuery({
-    queryKey: ['bookings', 'adjustment-parent', invoice.pnr],
-    queryFn: () => listBookings({ q: invoice.pnr ?? '', pageSize: 50 }),
-    enabled: Boolean(invoice.pnr),
+    queryKey: ['bookings', 'adjustment-parent', debouncedSearch],
+    queryFn: () => listBookings({ q: debouncedSearch, pageSize: 50 }),
+    enabled: debouncedSearch.trim().length >= 3,
   });
 
   /** True only when this PNR's lookup has FAILED and nothing was ever successfully fetched for it.
@@ -122,12 +133,24 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
   // search itself is a substring match on name-or-PNR, so this client-side filter is what actually
   // enforces "this row really is on the same PNR", not the search parameters.
   const rows = useMemo(() => {
-    const wanted = invoice.pnr?.trim().toUpperCase();
+    const wanted = invoice.originalPnr?.trim().toUpperCase();
     if (!wanted) return [] as BookingRow[];
     return (data?.bookings ?? []).filter(
       (row) => row.bookingType === 'New' && row.pnr?.trim().toUpperCase() === wanted
     );
-  }, [data, invoice.pnr]);
+  }, [data, invoice.originalPnr]);
+
+  /** Every DISTINCT PNR the search turned up, New rows only — what the picker offers. The backend
+   * `q` is a substring match over name-or-PNR, so this can legitimately hold several PNRs. */
+  const pnrGroups = useMemo(() => {
+    const byPnr = new Map<string, BookingRow[]>();
+    for (const row of data?.bookings ?? []) {
+      if (row.bookingType !== 'New' || !row.pnr) continue;
+      const key = row.pnr.trim().toUpperCase();
+      byPnr.set(key, [...(byPnr.get(key) ?? []), row]);
+    }
+    return Array.from(byPnr.entries()).map(([pnr, passengers]) => ({ pnr, passengers }));
+  }, [data]);
 
   useEffect(() => {
     // Still LOADING the current PNR's query — `rows` is empty here too, exactly like a genuine
@@ -179,6 +202,36 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
     if (changed) onChangeRef.current({ ...current, parentPassengerIds: working });
   }, [rows, data, lookupFailed]);
 
+  /** Typing a new PNR un-commits the current one. `rows` then empties, which drives the
+   *  stale-parent reconciliation in the effect above — the same protection a direct PNR edit
+   *  already had. */
+  function handleSearchChange(value: string) {
+    onChange({ ...invoice, originalPnr: value });
+  }
+
+  /** Commits a PNR from the search results, and fills in whatever trip detail the scan lacks.
+   *  See the file-level comment for why this is fill-if-empty and carries no `futureOnly` filter. */
+  function pickGroup(group: { pnr: string; passengers: BookingRow[] }) {
+    const [first] = group.passengers;
+    // Only ONE arrival-date slot is in force at a time (`arrDateChoice`); fill that one, and only
+    // when it is empty. Writing both would silently change which date the operator sees.
+    const arrival = first.arrDate?.slice(0, 10) ?? null;
+    const arrivalPatch =
+      invoice.arrDateChoice === 'return'
+        ? { arrDateReturn: invoice.arrDateReturn ?? arrival }
+        : { arrDateFinal: invoice.arrDateFinal ?? arrival };
+
+    onChange({
+      ...invoice,
+      originalPnr: group.pnr,
+      airlineCode: invoice.airlineCode ?? first.airlineCode ?? null,
+      depCity: invoice.depCity ?? first.depCity ?? null,
+      arrCity: invoice.arrCity ?? first.arrCity ?? null,
+      depDate: invoice.depDate ?? first.depDate?.slice(0, 10) ?? null,
+      ...arrivalPatch,
+    });
+  }
+
   function pickParent(index: number, parentId: string) {
     const nextParentIds = [...invoice.parentPassengerIds];
     nextParentIds[index] = parentId;
@@ -193,39 +246,107 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
     onChange({ ...invoice, parentPassengerIds: nextParentIds });
   }
 
-  if (!invoice.pnr) return null;
+  const searchBox = (
+    <div className="space-y-1">
+      <Label htmlFor="scan-original-pnr">Original PNR</Label>
+      <Input
+        id="scan-original-pnr"
+        aria-label="Original PNR"
+        value={search}
+        onChange={(e) => handleSearchChange(e.target.value)}
+        placeholder="Type at least 3 characters to find the original booking"
+      />
+      {/* Offered only once the current PNR has no exact match — on the happy path the scanned PNR
+          resolves straight away and an extra list of near-misses would just be noise. */}
+      {rows.length === 0 && pnrGroups.length > 0 && (
+        <ul className="rounded-md border bg-popover text-popover-foreground shadow">
+          {pnrGroups.map((group) => (
+            <li key={group.pnr}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => pickGroup(group)}
+              >
+                {group.pnr} — {group.passengers[0].invoiceNumber} — {group.passengers.length}{' '}
+                {group.passengers.length === 1 ? 'passenger' : 'passengers'}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
-  // A terminal lookup failure must LOOK different from loading. Rendering `null` here (the original
-  // behaviour) was byte-for-byte identical to the pending state, so an operator whose network
-  // dropped mid-review saw no signal whatsoever — while the effect above had just cleared their
-  // parent pick, silently disabling Save with nothing on screen to explain why.
-  if (lookupFailed) {
-    return (
-      <p className="text-sm text-destructive">
-        Could not look up the original booking for this PNR. Check your connection and try again.
-      </p>
-    );
-  }
+  /**
+   * Everything BELOW the search box. Split out as a variable rather than four separate `return`
+   * statements, because the search box must keep a STABLE position in the tree: React reconciles
+   * by position, so returning `searchBox` bare in one state and `<div>{searchBox}...</div>` in
+   * another unmounts and remounts the `<input>` the moment the query settles — which drops the
+   * operator's focus and any keystrokes still in flight, mid-word. Found by a test whose typing
+   * silently went nowhere; it is a real focus bug in a browser, not a test artifact.
+   */
+  const body = (() => {
+    // A terminal lookup failure must LOOK different from loading. Rendering `null` here (the
+    // original behaviour) was byte-for-byte identical to the pending state, so an operator whose
+    // network dropped mid-review saw no signal whatsoever — while the effect above had just
+    // cleared their parent pick, silently disabling Save with nothing on screen to explain why.
+    if (lookupFailed) {
+      return (
+        <p className="text-sm text-destructive">
+          Could not look up the original booking for this PNR. Check your connection and try again.
+        </p>
+      );
+    }
 
-  // Query still pending — say nothing rather than flashing a "not found" message that a moment
-  // later turns out to be wrong.
-  if (data === undefined) return null;
+    // Query still pending — say nothing ABOUT THE RESULT rather than flashing a "not found"
+    // message that a moment later turns out to be wrong. The search box above always stays: it is
+    // the only control the operator has, so hiding it mid-fetch would remove their only way to act.
+    if (data === undefined) return null;
 
-  if (rows.length === 0) {
-    return <p className="text-sm text-destructive">No original booking found for this PNR.</p>;
-  }
+    if (rows.length === 0) {
+      return (
+        <p className="text-sm text-destructive">
+          No original booking found for this PNR. Search for the correct one above.
+        </p>
+      );
+    }
 
-  const anyUnresolved = invoice.parentPassengerIds.some((id) => id === null);
+    return <ParentPickers invoice={invoice} rows={rows} onPick={pickParent} onClear={clearParent} />;
+  })();
 
   return (
     <div className="space-y-2 rounded-md border p-3">
+      {searchBox}
+      {body}
+    </div>
+  );
+}
+
+/** The per-passenger resolution list. Extracted so the parent's single return stays readable; it
+ *  holds no state and every invariant it enforces is documented on `ScanAdjustmentParent`. */
+function ParentPickers({
+  invoice,
+  rows,
+  onPick,
+  onClear,
+}: {
+  invoice: ReviewInvoice;
+  rows: BookingRow[];
+  onPick: (index: number, parentId: string) => void;
+  onClear: (index: number) => void;
+}) {
+  const anyUnresolved = invoice.parentPassengerIds.some((id) => id === null);
+
+  return (
+    <>
       <p className="text-sm font-medium">
         {anyUnresolved ? 'Choose the original passenger' : 'Original passenger resolved'}
       </p>
       {invoice.passengers.map((passenger, index) => {
         const parentId = invoice.parentPassengerIds[index];
         // Whatever id any OTHER row currently holds — recomputed fresh from CURRENT state every
-        // render, so this stays correct through any number of Change→re-pick cycles.
+        // render, so this stays correct through any number of Changeâ†’re-pick cycles.
         const takenElsewhere = new Set(
           invoice.parentPassengerIds.filter((id, i): id is string => id !== null && i !== index)
         );
@@ -238,14 +359,14 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
               className="flex items-center justify-between gap-2 rounded-md border border-emerald-500/40 bg-emerald-50 p-2 text-sm dark:bg-emerald-950/20"
             >
               <span>
-                {passenger.name} → {row ? `${row.pnr} — ${row.passengerName} — ${row.invoiceNumber}` : 'resolved'}
+                {passenger.name} â†’ {row ? `${row.pnr} — ${row.passengerName} — ${row.invoiceNumber}` : 'resolved'}
               </span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 aria-label={`Change original passenger for ${passenger.name}`}
-                onClick={() => clearParent(index)}
+                onClick={() => onClear(index)}
               >
                 Change
               </Button>
@@ -264,7 +385,7 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
                 assigned to another row.
               </p>
             ) : (
-              <Select value="" onValueChange={(value) => pickParent(index, value)}>
+              <Select value="" onValueChange={(value) => onPick(index, value)}>
                 <SelectTrigger
                   id={`scan-adjustment-parent-${index}`}
                   aria-label={`Original passenger for ${passenger.name}`}
@@ -283,6 +404,6 @@ export default function ScanAdjustmentParent({ invoice, onChange }: ScanAdjustme
           </div>
         );
       })}
-    </div>
+    </>
   );
 }

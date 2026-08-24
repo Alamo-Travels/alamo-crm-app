@@ -65,8 +65,20 @@ export interface ReviewInvoice extends ScannedInvoice {
   paymentType?: 'card' | 'check' | 'cash';
   /** Customer id per passenger index; null until linked. */
   customerIds: (string | null)[];
+  /**
+   * For Reissue/Refund only: WHICH PNR to look the original booking up under.
+   *
+   * Seeded from the scanned `pnr` (the overwhelmingly common case — a reissue usually keeps its
+   * PNR), but deliberately a SEPARATE field, because the two are not interchangeable:
+   *   - `pnr` is the adjustment's OWN record locator, and is what `saveScannedAdjustment` POSTs.
+   *     A reissue is sometimes ticketed under a NEW PNR, in which case it is not the original's.
+   *   - `originalPnr` only ever addresses the booking being adjusted. Correcting an OCR misread
+   *     here must not rewrite what gets saved on the adjustment.
+   * Editing it clears any resolved `parentPassengerIds`, since they belonged to the old PNR.
+   */
+  originalPnr: string | null;
   /** For Reissue/Refund only: the original (New) passenger each row adjusts, resolved by
-   * `ScanAdjustmentParent` from the scanned PNR. Always present (one slot per scanned passenger,
+   * `ScanAdjustmentParent` from `originalPnr`. Always present (one slot per scanned passenger,
    * `null` until resolved) but only load-bearing for `statusFor`/saving on those two types. */
   parentPassengerIds: (string | null)[];
   /** For Reissue/Refund only: the `AdjustmentResponse.id` returned once a passenger's adjustment

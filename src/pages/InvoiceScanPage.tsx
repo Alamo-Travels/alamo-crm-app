@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import ScanInvoiceDetail, { ScanPageImage } from '@/components/invoice-scan/scan-invoice-detail';
+import { LeaveScanDialog } from '@/components/invoice-scan/leave-scan-dialog';
 import ScanInvoiceList from '@/components/invoice-scan/scan-invoice-list';
 import { ReviewInvoice, ReviewStatus, reconciles, statusFor } from '@/components/invoice-scan/reviewInvoice';
 import {
@@ -21,6 +22,7 @@ import { formatDisplayDate } from '@/utils/dateFormat';
 import { ScanResolver, buildResolver } from '@/utils/invoiceScan/resolve';
 import { ScanProgress, scanPdf } from '@/utils/invoiceScan/ocr/scanPdf';
 import { ScannedInvoice } from '@/utils/invoiceScan/types';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 
 /** A Reissue/Refund is an adjustment against an existing New passenger, not a new booking — it
  * saves through `saveScannedAdjustment` (`POST /passengers/:id/adjustments`), never
@@ -117,6 +119,9 @@ function toReviewInvoice(
     arrCity: null,
     arrDateChoice: 'return',
     remark: null,
+    // Seeded from the scanned PNR: a reissue usually keeps it, so the common case resolves with
+    // no interaction. The operator searches for a different one only when it does not.
+    originalPnr: invoice.pnr,
     customerIds: invoice.passengers.map(() => null),
     parentPassengerIds: invoice.passengers.map(() => null),
     adjustmentIds: invoice.passengers.map(() => null),
@@ -161,6 +166,16 @@ export default function InvoiceScanPage() {
   const [batchSaving, setBatchSaving] = useState(false);
 
   const queryClient = useQueryClient();
+
+  /**
+   * Work that leaving this page would destroy: a scan still running, or any parsed invoice not yet
+   * saved. A fully-saved batch has nothing to lose and never prompts.
+   *
+   * A scan IN PROGRESS counts even though nothing is on screen yet — OCR of a real stack takes
+   * minutes, and that time is exactly what a stray Back click throws away.
+   */
+  const hasUnsavedScan = progress !== null || invoices.some((invoice) => invoice.status !== 'saved');
+  const leaveGuard = useNavigationGuard(hasUnsavedScan);
 
   // ONE resolver instance for the whole review session, not one per invoice selection —
   // `resolve.ts`'s airline/airport memoisation only pays off if the SAME instance (and therefore
@@ -630,6 +645,12 @@ export default function InvoiceScanPage() {
           </Card>
         </div>
       )}
+
+      <LeaveScanDialog
+        open={leaveGuard.blocked}
+        onStay={leaveGuard.reset}
+        onLeave={leaveGuard.proceed}
+      />
     </div>
   );
 }

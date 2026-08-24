@@ -34,6 +34,7 @@ const INVOICE: ReviewInvoice = {
   remark: null,
   arrDateChoice: 'return', customerIds: [null], parentPassengerIds: [null], adjustmentIds: [null],
   adjustmentAmounts: [null],
+  originalPnr: 'YKHRUA',
 };
 
 /**
@@ -419,6 +420,7 @@ const INVOICE_A: ReviewInvoice = {
   remark: null,
   arrDateChoice: 'return', customerIds: [null], parentPassengerIds: [null], adjustmentIds: [null],
   adjustmentAmounts: [null],
+  originalPnr: null,
 };
 
 const INVOICE_B: ReviewInvoice = {
@@ -431,6 +433,7 @@ const INVOICE_B: ReviewInvoice = {
   parentPassengerIds: [null],
   adjustmentIds: [null],
   adjustmentAmounts: [null],
+  originalPnr: null,
 };
 
 /** Mimics the `selectedId`/`invoices` round trip `InvoiceScanPage` actually drives
@@ -529,5 +532,31 @@ describe('per-invoice payment', () => {
     render(<Harness initial={{ ...INVOICE, type: 'Voided' }} />);
     expect(screen.queryByRole('combobox', { name: 'Payment status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Payment type' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ScanInvoiceDetail — PNR and original-booking link', () => {
+  it('carries the original-booking lookup along while it still matches the scanned PNR', async () => {
+    const onChange = vi.fn();
+    render(<Harness initial={{ ...INVOICE, type: 'Reissue', pnr: 'YKHRUA', originalPnr: 'YKHRUA' }} onChange={onChange} />);
+
+    fireEvent.change(screen.getByLabelText('PNR'), { target: { value: 'YKHRUB' } });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ pnr: 'YKHRUB', originalPnr: 'YKHRUB' })
+    );
+  });
+
+  it('leaves a deliberately different original-booking lookup alone', async () => {
+    const onChange = vi.fn();
+    // The operator already searched out a DIFFERENT original: this reissue was ticketed on a new
+    // PNR. Editing the reissue's own PNR must not destroy that link.
+    render(<Harness initial={{ ...INVOICE, type: 'Reissue', pnr: 'YKHRUA', originalPnr: 'CNRAPN' }} onChange={onChange} />);
+
+    fireEvent.change(screen.getByLabelText('PNR'), { target: { value: 'YKHRUB' } });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ pnr: 'YKHRUB', originalPnr: 'CNRAPN' })
+    );
   });
 });

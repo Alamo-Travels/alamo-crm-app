@@ -10,6 +10,7 @@ import * as bookings from '@/api/bookings.api';
 import * as customersApi from '@/api/customers.api';
 import * as flightDataApi from '@/api/flightData.api';
 import { useAuthStore } from '@/stores/authStore';
+import { TEST_ROUTE_HERE, TEST_ROUTE_THERE, withTestRouter } from '@/test-utils/router';
 
 vi.mock('@/utils/invoiceScan/ocr/scanPdf');
 // Only the fix-round-2 regression test below actually exercises this (typing into Departure
@@ -40,12 +41,21 @@ vi.mock('@/api/customers.api', async (importOriginal) => ({
   searchCustomers: vi.fn().mockResolvedValue([]),
 }));
 
-function renderPage() {
-  return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+// The page calls useNavigationGuard -> useBlocker, which throws outside a RouterProvider, so every
+// render here goes through a throwaway test router. `router` is returned so the leave-guard tests
+// can drive a real navigation and assert the location did not move.
+async function renderPage(client?: QueryClient) {
+  const queryClient = client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { router, ui } = withTestRouter(
+    <QueryClientProvider client={queryClient}>
       <InvoiceScanPage />
     </QueryClientProvider>
   );
+  const result = render(ui);
+  // RouterProvider paints nothing until the router has loaded; without this every query below
+  // runs against an empty document.
+  await screen.findByLabelText(/scanned invoices/i);
+  return { ...result, router, queryClient };
 }
 
 const INVOICE = {
@@ -143,14 +153,14 @@ afterEach(() => {
 });
 
 describe('InvoiceScanPage', () => {
-  it('shows an upload prompt before any file is chosen', () => {
-    renderPage();
+  it('shows an upload prompt before any file is chosen', async () => {
+    await renderPage();
     expect(screen.getByLabelText(/scanned invoices/i)).toBeInTheDocument();
   });
 
   it('scans a chosen PDF and lists the invoices it found', async () => {
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map([[1, 'data:x']]) });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -172,7 +182,7 @@ describe('InvoiceScanPage', () => {
         [2, 'data:image/png;base64,TWO'],
       ]),
     });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -195,7 +205,7 @@ describe('InvoiceScanPage', () => {
         [6, 'data:image/png;base64,SIX'],
       ]),
     });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -215,7 +225,7 @@ describe('InvoiceScanPage', () => {
       invoices: [{ ...INVOICE, issues: ['No PNR found'] }],
       pageImages: new Map(),
     });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -227,7 +237,7 @@ describe('InvoiceScanPage', () => {
 
   it('surfaces a scan failure instead of failing silently', async () => {
     vi.mocked(scan.scanPdf).mockRejectedValue(new Error('bad pdf'));
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -257,7 +267,7 @@ describe('InvoiceScanPage', () => {
       .mockImplementationOnce(() => firstScan)
       .mockResolvedValueOnce({ invoices: [SECOND_INVOICE], pageImages: new Map() });
 
-    renderPage();
+    await renderPage();
     const input = screen.getByLabelText(/scanned invoices/i);
 
     // First upload — scanPdf's promise never resolves during this test until told to.
@@ -292,7 +302,7 @@ describe('InvoiceScanPage', () => {
     const voidedInvoice = { ...INVOICE, invoiceNumber: '0000900', type: 'Voided' as const };
     const newInvoice = { ...INVOICE, invoiceNumber: '0000901', type: 'New' as const };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [voidedInvoice, newInvoice], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -323,7 +333,7 @@ describe('InvoiceScanPage', () => {
     const invoiceA = { ...INVOICE, invoiceNumber: '0000910' };
     const invoiceB = { ...INVOICE, invoiceNumber: '0000911', depCityText: 'DALLAS' };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [invoiceA, invoiceB], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -377,7 +387,7 @@ describe('InvoiceScanPage repeat upload', () => {
         },
       },
     });
-    renderPage();
+    await renderPage();
     const input = screen.getByLabelText(/scanned invoices/i);
 
     await userEvent.upload(input, new File(['x'], 'first.pdf', { type: 'application/pdf' }));
@@ -442,7 +452,7 @@ describe('InvoiceScanPage auto-resolution anti-clobber', () => {
     vi.mocked(flightDataApi.searchAirports).mockReturnValue(pendingAirports);
 
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -468,7 +478,7 @@ describe('InvoiceScanPage terminal saved state', () => {
   it('keeps a saved invoice saved when the operator edits it afterwards', async () => {
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000900', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -502,7 +512,7 @@ describe('InvoiceScanPage terminal saved state', () => {
 
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000249', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -528,7 +538,7 @@ describe('InvoiceScanPage saving', () => {
     // A freshly-scanned New invoice starts unlinked (customerIds all null), so statusFor marks it
     // "attention" — the batch button must not be clickable yet.
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -545,11 +555,7 @@ describe('InvoiceScanPage saving', () => {
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    render(
-      <QueryClientProvider client={client}>
-        <InvoiceScanPage />
-      </QueryClientProvider>
-    );
+    await renderPage(client);
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -588,7 +594,7 @@ describe('InvoiceScanPage saving', () => {
         },
       })
       .mockResolvedValueOnce({ id: 'b1', invoiceNumber: '0000900', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -618,7 +624,7 @@ describe('InvoiceScanPage saving', () => {
         response: { status: 400, data: { error: { message: 'Booking date is required' } } },
       })
       .mockResolvedValueOnce({ id: 'b2', invoiceNumber: '0000901', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -655,7 +661,7 @@ describe('InvoiceScanPage saving', () => {
       issues: ['1 passenger amount could not be read from the ticket lines and must be entered manually'],
     };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [blankAmountInvoice], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -678,7 +684,7 @@ describe('InvoiceScanPage saving', () => {
   // (no match) keeps this passenger unlinked, isolating this test from the amount case above.
   it('blocks Save while any non-Voided passenger is still unlinked', async () => {
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -717,7 +723,7 @@ describe('InvoiceScanPage saving', () => {
       })
       .mockResolvedValueOnce({ id: 'b2', invoiceNumber: '0000901', passengers: [] });
     const errorSpy = vi.spyOn(toast, 'error');
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -759,7 +765,7 @@ describe('InvoiceScanPage saving', () => {
     };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [invoiceA, invoiceB], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000810', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -811,7 +817,7 @@ describe('InvoiceScanPage saving', () => {
     vi.mocked(flightDataApi.searchAirlines).mockResolvedValue([AIRLINE_MATCH]);
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [THREE_PAX_INVOICE], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000800', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -841,7 +847,7 @@ describe('InvoiceScanPage saving', () => {
     vi.mocked(flightDataApi.searchAirlines).mockResolvedValue([AIRLINE_MATCH]);
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [THREE_PAX_INVOICE], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000800', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -890,11 +896,7 @@ describe('InvoiceScanPage saving', () => {
     });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
-    render(
-      <QueryClientProvider client={client}>
-        <InvoiceScanPage />
-      </QueryClientProvider>
-    );
+    await renderPage(client);
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -943,7 +945,7 @@ describe('InvoiceScanPage saving', () => {
     };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [blankAmountInvoice], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000249', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -992,7 +994,7 @@ describe('InvoiceScanPage saving', () => {
     };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [invoiceA, invoiceB], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000820', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1042,7 +1044,7 @@ describe('InvoiceScanPage saving', () => {
     vi.mocked(customersApi.searchCustomers).mockResolvedValue([MATCH]);
     vi.mocked(flightDataApi.searchAirlines).mockResolvedValue([AIRLINE_MATCH]);
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [INVOICE], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1068,7 +1070,7 @@ describe('InvoiceScanPage saving', () => {
     const invoiceA = { ...INVOICE, invoiceNumber: '0000910' };
     const invoiceB = { ...INVOICE, invoiceNumber: '0000911' }; // identical airlineName
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [invoiceA, invoiceB], pageImages: new Map() });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1108,7 +1110,7 @@ describe('InvoiceScanPage saving', () => {
     const goodInvoice = { ...INVOICE, invoiceNumber: '0000701' };
     vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [mismatchInvoice, goodInvoice], pageImages: new Map() });
     vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000701', passengers: [] });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1194,7 +1196,7 @@ describe('InvoiceScanPage saving', () => {
         response: { status: 400, data: { error: { message: 'boom' } } },
       })
       .mockResolvedValueOnce({ id: 'a2', bookingType: 'Reissue', parentRef: 'p2', amount: 200 });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1284,7 +1286,7 @@ describe('InvoiceScanPage saving', () => {
       })
       .mockResolvedValueOnce({ id: 'a2', bookingType: 'Reissue', parentRef: 'p2', amount: 200 });
     const errorSpy = vi.spyOn(toast, 'error');
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1357,7 +1359,7 @@ describe('InvoiceScanPage saving', () => {
       }
       return { bookings: [], total: 0, page: 1, pageSize: 50 };
     });
-    renderPage();
+    await renderPage();
 
     await userEvent.upload(
       screen.getByLabelText(/scanned invoices/i),
@@ -1380,5 +1382,81 @@ describe('InvoiceScanPage saving', () => {
     // Belt-and-braces: even if something tried to click through, no adjustment should ever be
     // posted against the stale 'p1' after the correction.
     expect(bookings.createAdjustment).not.toHaveBeenCalled();
+  });
+});
+
+describe('InvoiceScanPage leave guard', () => {
+  /** Uploads a PDF and waits for the parsed invoice to appear, leaving the page "dirty". */
+  async function uploadAndWait() {
+    await userEvent.upload(
+      screen.getByLabelText(/scanned invoices/i),
+      new File(['x'], 'stack.pdf', { type: 'application/pdf' })
+    );
+    await screen.findByRole('button', { name: /save all ready/i });
+  }
+
+  it('does not interrupt a navigation before anything has been scanned', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
+    const { router } = await renderPage();
+
+    await router.navigate({ to: TEST_ROUTE_THERE });
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(TEST_ROUTE_THERE));
+    expect(screen.queryByRole('dialog', { name: /leave the scanned invoices/i })).not.toBeInTheDocument();
+  });
+
+  it('holds the navigation and asks first once a scan is on screen', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
+    const { router } = await renderPage();
+    await uploadAndWait();
+
+    void router.navigate({ to: TEST_ROUTE_THERE });
+
+    expect(await screen.findByRole('dialog', { name: /leave the scanned invoices/i })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(TEST_ROUTE_HERE);
+  });
+
+  it('stays put and keeps the review when "Stay on this page" is chosen', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
+    const { router } = await renderPage();
+    await uploadAndWait();
+    void router.navigate({ to: TEST_ROUTE_THERE });
+    await screen.findByRole('dialog', { name: /leave the scanned invoices/i });
+
+    await userEvent.click(screen.getByRole('button', { name: /stay on this page/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /leave the scanned invoices/i })).not.toBeInTheDocument()
+    );
+    expect(router.state.location.pathname).toBe(TEST_ROUTE_HERE);
+    // The review itself must survive — cancelling must not cost the scan.
+    expect(screen.getByRole('button', { name: /save all ready/i })).toBeInTheDocument();
+  });
+
+  it('lets the navigation through when "Leave and discard" is chosen', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
+    const { router } = await renderPage();
+    await uploadAndWait();
+    void router.navigate({ to: TEST_ROUTE_THERE });
+    await screen.findByRole('dialog', { name: /leave the scanned invoices/i });
+
+    await userEvent.click(screen.getByRole('button', { name: /leave and discard/i }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(TEST_ROUTE_THERE));
+  });
+
+  it('stops guarding once every scanned invoice has been saved', async () => {
+    vi.mocked(scan.scanPdf).mockResolvedValue({ invoices: [VOIDED_INVOICE], pageImages: new Map() });
+    vi.mocked(bookings.createBooking).mockResolvedValue({ id: 'b1', invoiceNumber: '0000900', passengers: [] });
+    const { router } = await renderPage();
+    await uploadAndWait();
+
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled());
+
+    await router.navigate({ to: TEST_ROUTE_THERE });
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(TEST_ROUTE_THERE));
+    expect(screen.queryByRole('dialog', { name: /leave the scanned invoices/i })).not.toBeInTheDocument();
   });
 });
