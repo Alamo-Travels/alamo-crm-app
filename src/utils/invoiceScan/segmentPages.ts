@@ -1,7 +1,22 @@
 import { OcrPage } from './types';
 
-/** `PAGE: 01` in the header. Tolerates an unpadded `PAGE: 1` and stray spacing. */
-const FIRST_PAGE = /\bPAGE:\s*0*1\b/;
+/**
+ * `PAGE: 01` in the header. Tolerates an unpadded `PAGE: 1`, stray spacing, and the glyph
+ * confusions MEASURED on real scans: the leading zero read as a letter `O`, and the `1` read as
+ * `l`/`I`.
+ *
+ * The `O` tolerance is not cosmetic. On testDocs/TestInvoices.pdf two pages OCR'd as `PAGE: O01`,
+ * the strict pattern missed both boundaries, and the two invoices that began there were absorbed
+ * into their predecessors and never created — while the merged record still reconciled against
+ * NET CC BILLING and presented as ready to save. A missed boundary silently destroys an invoice;
+ * a spurious one produces an obviously-partial extra record. Erring toward tolerance is therefore
+ * correct here, and matches this file's existing "merging wrongly is invisible" reasoning.
+ *
+ * `\s*` anchors the digits immediately after the colon, so a genuine later page still cannot
+ * match: `PAGE: 02` fails outright, and in `PAGE: 11` there is no word boundary after the first
+ * `1` and nothing may be skipped to reach the second.
+ */
+const FIRST_PAGE = /\bPAGE:\s*[O0]*[1lI]\b/;
 
 /**
  * Sentinel line `scanPdf` writes as the sole line of a page it could not render or OCR (see

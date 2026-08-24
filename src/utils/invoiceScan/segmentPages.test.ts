@@ -76,3 +76,30 @@ describe('segmentPages', () => {
     });
   });
 });
+
+describe('OCR damage to the PAGE: 01 boundary', () => {
+  // MEASURED on testDocs/TestInvoices.pdf: pages 4 and 10 OCR'd their leading zero as the LETTER
+  // O ("PAGE: O01"). The strict pattern missed both boundaries, so invoices 0000253 and 0000257
+  // were absorbed into their predecessors and never reached the ledger at all - while the merged
+  // record still reconciled and looked ready to save. Silent loss of a whole invoice is the worst
+  // failure this feature has, so the tolerance is not optional.
+  it('treats PAGE: O01 as a first page, with the zero misread as a letter O', () => {
+    const groups = segmentPages([
+      page(1, 'ITINERARY/INVOICE NO. 0000252', 'CUSTOMER NBR: 2812613000 KEHVES PAGE: 01'),
+      page(2, 'CONTINUED'),
+      page(3, 'ITINERARY/INVOICE NO. 0000253', 'CUSTOMER NBR: 2812613000 OXKLKT PAGE: O01'),
+      page(4, 'CONTINUED'),
+    ]);
+    expect(groups.map((g) => g.map((p) => p.pageNumber))).toEqual([[1, 2], [3, 4]]);
+  });
+
+  it('still does not treat a later page as a boundary', () => {
+    const groups = segmentPages([
+      page(1, 'PAGE: 01'),
+      page(2, 'PAGE: 02'),
+      page(3, 'PAGE: O2'),
+      page(4, 'PAGE: 11'),
+    ]);
+    expect(groups).toHaveLength(1);
+  });
+});

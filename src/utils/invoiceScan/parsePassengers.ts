@@ -18,7 +18,33 @@ export interface ParsedPassengers {
  * widening one character cannot pull in an unrelated line.
  */
 const TICKET_LABEL = /^\s*A[IT]R\s+TICKETS?\s+(\S+)\s+(.*)$/i;
-const FOR_FIRST = /^\s*FOR:\s*(\S.*)$/;
+/**
+ * The first passenger line. The capture is shaped like a PAX name (`LAST/FIRST MIDDLE`) rather
+ * than "everything after FOR:", because handwriting written to the RIGHT of the FOR: block lands
+ * on the same OCR line: real scans produced `FOR: MATHEW/JAMES ) NC . AY` and
+ * `FOR: MATHEW/LUCY V . ~, OF`, and the whole tail was carried into the ledger and into the
+ * customer match. Stopping at the first character a name cannot contain cuts the annotation off
+ * without needing to know anything about what was written.
+ *
+ * Mirrors `CONTINUATION_NAME`'s character class deliberately — the two describe the same thing,
+ * and a name the continuation rule accepts must not be rejected here.
+ */
+const FOR_FIRST = /^\s*FOR:\s*([A-Z][A-Z.'\- ]*\/[A-Z][A-Z.'\- ]*)/;
+/**
+ * A punctuation fragment left dangling once the annotation was cut off (`LUCY V .` → `LUCY V`).
+ * The leading `\s+` is load-bearing: it requires the punctuation to stand alone, so a genuine
+ * `JOHN JR.` keeps its full stop.
+ */
+const TRAILING_FRAGMENT = /\s+[.'-]+$/;
+/**
+ * Stray whitespace either side of the `LAST/FIRST` separator — measured as `VARGHESE /DAVIS` on a
+ * real scan. Cosmetic on screen, but it breaks the exact customer-name match, so it is normalised
+ * here rather than left for the operator to notice.
+ *
+ * Done in this file and NOT in `normalizeName`, which is hand-synced with the API's copy of the
+ * same function: this is an OCR artifact, not a naming rule, and the two must not diverge.
+ */
+const SEPARATOR_SPACING = /\s*\/\s*/;
 /**
  * A continuation line inside the FOR: block: `LAST/FIRST MIDDLE`, optionally `CHD`.
  *
@@ -99,7 +125,11 @@ function readForBlock(lines: string[]): { name: string; child: boolean }[] {
 /** A trailing CHD marks a child. PAX type is computed from the customer's DOB and never
  *  stored, so the marker is stripped from the name but kept as a matching hint. */
 function splitChild(raw: string): { name: string; child: boolean } {
-  const trimmed = raw.trim();
+  const trimmed = raw
+    .trim()
+    .replace(TRAILING_FRAGMENT, '')
+    .replace(SEPARATOR_SPACING, '/')
+    .trim();
   const child = /\sCHD$/.test(trimmed);
   return { name: child ? trimmed.replace(/\sCHD$/, '').trim() : trimmed, child };
 }

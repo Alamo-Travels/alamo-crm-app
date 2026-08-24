@@ -20,6 +20,22 @@ export interface RenderedPage {
 /** 300 dpi equivalent. PDF user units are 1/72 inch. */
 const SCALE = 300 / 72;
 
+/**
+ * Where pdfjs-dist's WebAssembly image decoders (`jbig2.wasm`, `openjpeg.wasm`, …) are served
+ * from. The files are copied out of `node_modules/pdfjs-dist/wasm` into `public/pdfjs-wasm` by a
+ * plugin in `vite.config.ts`, so they always match the installed pdfjs version and are never
+ * committed. `BASE_URL` rather than a bare `/` so a deployment under a sub-path still resolves.
+ *
+ * **This is required, not an optimisation.** pdfjs-dist 6 moved JBIG2/JPX decoding into WASM and
+ * defaults `wasmUrl` to the relative string `"wasm"`, which resolves to `/wasm/` — a path this app
+ * does not serve. A scan whose pages use those codecs then fails to decode, and the page renders
+ * COMPLETELY BLANK rather than erroring: measured on a real 38-page agency batch, every page came
+ * back with zero non-white pixels and OCR'd to zero lines, so nothing in the stack could be
+ * scanned at all. It went unnoticed because the three original reference scans are DCTDecode-only
+ * and never reach these decoders. Do not remove this.
+ */
+const WASM_URL = `${import.meta.env.BASE_URL}pdfjs-wasm/`;
+
 async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not read the page image'))), 'image/png');
@@ -41,7 +57,7 @@ export async function renderPdfPages(
   // (`PDFDocumentLoadingTask`), which is what owns the worker and the parsed document — the
   // `PDFDocumentProxy` itself only offers `cleanup()`, which frees cached page resources but keeps
   // the document and worker alive.
-  const loadingTask = pdfjs.getDocument({ data });
+  const loadingTask = pdfjs.getDocument({ data, wasmUrl: WASM_URL });
   const doc = await loadingTask.promise;
   const pages: RenderedPage[] = [];
 

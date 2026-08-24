@@ -290,3 +290,41 @@ describe('OCR-damaged ticket label', () => {
     ]);
   });
 });
+
+describe('handwriting bleeding into the FOR: line', () => {
+  // MEASURED on the two adjustment sheets in testDocs/TestInvoices.pdf, whose handwritten amount
+  // sits to the right of the FOR: block and gets OCR'd onto the same line:
+  //   "FOR: MATHEW/JAMES ) NC . AY"   and   "FOR: MATHEW/LUCY V . ~, OF"
+  // The old capture took the whole rest of the line, so the customer match ran against a name
+  // with punctuation glued to it.
+  it('stops the name at the first character a PAX name cannot contain', () => {
+    const { passengers } = parsePassengers([
+      { pageNumber: 1, words: [], lines: ['FOR: MATHEW/JAMES ) NC . AY', ''] },
+    ]);
+    expect(passengers[0].name).toBe('Mathew/James');
+  });
+
+  it('trims a trailing punctuation fragment left behind by the handwriting', () => {
+    const { passengers } = parsePassengers([
+      { pageNumber: 1, words: [], lines: ['FOR: MATHEW/LUCY V . ~, OF', ''] },
+    ]);
+    expect(passengers[0].name).toBe('Mathew/Lucy V');
+  });
+
+  it('leaves an ordinary name completely alone', () => {
+    const { passengers } = parsePassengers([
+      { pageNumber: 1, words: [], lines: ['FOR: PARAPPATTU IDICULA/CHERIAN', ''] },
+    ]);
+    expect(passengers[0].name).toBe('Parappattu Idicula/Cherian');
+  });
+
+  // MEASURED: two continuation names on invoice 0000261 came back as `VARGHESE /DAVIS` with a
+  // stray space before the slash. Cosmetic on screen, but it breaks the exact customer match.
+  it('collapses stray whitespace around the name separator', () => {
+    const { passengers } = parsePassengers([
+      { pageNumber: 1, words: [], lines: ['FOR: VARGHESE/MARIA', 'VARGHESE /DAVIS', ''] },
+    ]);
+    expect(passengers.map((p) => p.name)).toEqual(['Varghese/Maria', 'Varghese/Davis']);
+  });
+});
+

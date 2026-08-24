@@ -20,8 +20,20 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
  */
 const INVOICE_NO = /ITINERARY\/INVOICE\s+NO\.?\s{0,3}([0-9]{4,}\b)/;
 const DATE_LABEL = /\bDATE:\s*(\d{1,2}\s+[A-Z]{3}\s+\d{2})\b/;
-/** Header line 2: the record locator sits between the customer number and `PAGE:`. */
-const PNR_LINE = /CUSTOMER\s+NBR:\s*\d+\s+([A-Z0-9]{6})\b/;
+/**
+ * Header line 2: the record locator sits between the customer number and `PAGE:`.
+ *
+ * The leading `C` of `CUSTOMER` is deliberately not required — it is the first glyph on the line
+ * and the one most often damaged (a real scan read it as a curly quote: `“USTOMER NBR:`), which
+ * cost an otherwise perfectly legible PNR. `USTOMER NBR:` followed by the customer number is
+ * distinctive enough on its own that dropping one character cannot pull in an unrelated line.
+ *
+ * The PNR itself stays strictly six `[A-Z0-9]`. A scan that reads `HWMWFP` as `HWMWE'P` yields NO
+ * match, and that is intended: stripping the punctuation would produce `HWMWEP`, a plausible and
+ * WRONG record locator written silently into the ledger. Fail loud and let the operator read it
+ * off the page image — the same rule the amount parsers follow.
+ */
+const PNR_LINE = /USTOMER\s+NBR:\s*\d+\s+([A-Z0-9]{6})\b/;
 
 /** `DD MMM YY` → ISO `YYYY-MM-DD`. A two-digit year always means 20YY. */
 export function parseInvoiceDate(text: string): string | null {

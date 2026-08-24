@@ -164,3 +164,25 @@ describe('renderPdfPages', () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('WASM image decoders', () => {
+  /**
+   * pdfjs-dist 6 decodes JBIG2/JPX in WebAssembly and must be told where those files live. Its
+   * default is the RELATIVE string "wasm", resolved against document.baseURI, so an app that
+   * never sets it fetches /wasm/jbig2.wasm and gets a 404.
+   *
+   * MEASURED consequence on testDocs/TestInvoices.pdf (a CCITTFax + DCT scanner profile): every
+   * one of its 38 pages rendered with literally ZERO non-white pixels and OCR'd to zero lines,
+   * so the whole stack was unscannable. The three original reference scans are DCT-only and never
+   * touch these decoders, which is why it went unnoticed. Do NOT drop this option.
+   */
+  it('tells pdfjs where its wasm decoders are', async () => {
+    stubDocument(1);
+    await renderPdfPages(pdfFile());
+
+    expect(getDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ wasmUrl: expect.stringContaining('pdfjs-wasm/') })
+    );
+  });
+});
+

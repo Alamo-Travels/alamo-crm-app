@@ -114,3 +114,27 @@ describe('parseHeader', () => {
     });
   });
 });
+
+describe('OCR damage to the CUSTOMER NBR label', () => {
+  // MEASURED: page 6 of testDocs/TestInvoices.pdf reads the leading C as a curly quote
+  // ("“USTOMER NBR: 2812613000 JRNHDJ"), which lost a perfectly legible PNR.
+  it('still reads the PNR when the leading C of CUSTOMER is damaged', () => {
+    const header = parseHeader([
+      { pageNumber: 1, words: [], lines: [
+        'SALES PERSON: BC ITINERARY/INVOICE NO. 0000254 DATE: 04 AUG 26',
+        '“USTOMER NBR: 2812613000 JRNHDJ PAGE: 01',
+      ] },
+    ]);
+    expect(header.pnr).toBe('JRNHDJ');
+  });
+
+  // Deliberately NOT repaired: page 28 reads HWMWFP as HWMWE'P. Stripping the punctuation would
+  // yield HWMWEP - a plausible, wrong record locator written straight into the ledger. Leaving it
+  // null surfaces it for the operator instead, which is this feature's fail-loud rule.
+  it('reports no PNR rather than guessing when the PNR itself is damaged', () => {
+    const header = parseHeader([
+      { pageNumber: 1, words: [], lines: ["CUSTOMER NBR: 2812613000 HWMWE'P PAGE: 01"] },
+    ]);
+    expect(header.pnr).toBeNull();
+  });
+});

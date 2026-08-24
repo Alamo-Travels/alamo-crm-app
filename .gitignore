@@ -29,3 +29,8 @@ CLAUDE.md
 **/superpowers
 **/.superpowers
 **/docs/
+
+# Copied out of node_modules/pdfjs-dist at build time by the copy-pdfjs-wasm plugin in
+# vite.config.ts. Never commit these: a checked-in copy silently goes stale against the installed
+# pdfjs-dist, and the symptom of a version mismatch is a scanned page that renders BLANK.
+public/pdfjs-wasm/
