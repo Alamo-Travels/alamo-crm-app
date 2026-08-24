@@ -12,10 +12,10 @@ function passenger(amount: number | null): ScannedPassenger {
 const COMPLETE = { customerIds: ['c1'], type: 'New' as const, parentPassengerIds: [], pnr: 'MHNGLM', airlineCode: 'EY' };
 
 describe('statusFor', () => {
-  // Fix round 2: `issues` (the frozen, scan-time OCR findings) is now ADVISORY DISPLAY TEXT ONLY,
+  // `issues` (the frozen, scan-time OCR findings) is now ADVISORY DISPLAY TEXT ONLY,
   // never a save gate — see reviewInvoice.ts's doc comment for the full reasoning. Before this, ANY
   // scan-time issue — including "N passenger amounts could not be read", the single most common
-  // OCR finding per Task 1's own measurement — froze the invoice at 'attention' FOREVER, even after
+  // OCR finding, measured at roughly 1 in 6 — froze the invoice at 'attention' FOREVER, even after
   // the operator typed in the correct figure, because nothing ever recomputed `issues`. This test
   // locks in the corrected contract: `statusFor` no longer even takes `issues` as an input, and an
   // invoice with complete live data (linked, priced, PNR + airline present) is 'ready' regardless
@@ -24,7 +24,7 @@ describe('statusFor', () => {
     expect(statusFor({ ...COMPLETE, passengers: [passenger(100)] })).toBe('ready');
   });
 
-  // THE central live-recomputed gate fix round 2 exists for: a null passenger amount blocks
+  // THE central live-recomputed gate: a null passenger amount blocks
   // Ready — and, critically, unblocks the moment the operator types a real figure (proven by the
   // companion test right below, same invoice shape, differing only in `amount`).
   it('flags a non-Voided invoice with an unread/blank passenger amount as needing attention', () => {
@@ -62,7 +62,7 @@ describe('statusFor', () => {
     expect(statusFor({ ...COMPLETE, customerIds: [null], passengers: [passenger(100)] })).toBe('attention');
   });
 
-  // --- Fix round 3: pnr/airlineCode, gated live against the backend's ACTUAL refine -----------
+  // --- pnr/airlineCode, gated live against the backend's ACTUAL refine ------------------------
   // (`createBookingSchema`: `voided || (pnr && airlineCode)`; the Adjustment schema requires `pnr`
   // unconditionally but leaves `airlineCode` optional — see reviewInvoice.ts's doc comment.)
 
@@ -74,7 +74,7 @@ describe('statusFor', () => {
     expect(statusFor({ ...COMPLETE, passengers: [passenger(100)], pnr: 'MHNGLM' })).toBe('ready');
   });
 
-  // THE central case fix round 3 exists for: `airlineCode` is never auto-resolved before this fix
+  // THE central case: `airlineCode` is never auto-resolved before this
   // (see InvoiceScanPage.tsx's new resolution effect) — a New invoice missing it must be blocked
   // even though everything else (link, amount, PNR) is complete, or "Save all ready" 400s at the
   // backend's refine on every single New invoice.
@@ -117,7 +117,7 @@ describe('statusFor', () => {
     ).toBe('attention');
   });
 
-  // --- Task 13: Reissue/Refund parent-passenger gating ----------------------------------------
+  // --- Reissue/Refund parent-passenger gating -------------------------------------------------
 
   it('flags a Reissue as needing attention while its original passenger is unresolved, even when linked and priced', () => {
     expect(

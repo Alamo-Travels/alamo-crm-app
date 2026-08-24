@@ -28,7 +28,7 @@ const FIRST_PAGE = /\bPAGE:\s*[O0]*[1lI]\b/;
  * worth of data absorbed into another with no trace beyond one generic issue on the wrong record.
  * Splitting unconditionally can at worst over-segment a page that was really just a mid-invoice
  * continuation, producing an extra, clearly-flagged partial invoice — visible and correctable.
- * Merging wrongly is invisible. See Task 8 fix round 2 (2026-08-02-invoice-scan-import).
+ * Merging wrongly is invisible.
  */
 export const UNREADABLE_PAGE_MARKER = '[[UNREADABLE PAGE]]';
 

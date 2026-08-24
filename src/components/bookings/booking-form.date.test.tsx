@@ -185,7 +185,7 @@ describe('BookingForm booking date', () => {
     const field = screen.getByLabelText('Passenger name');
     expect(field).toHaveValue('Smith/Jane');
     expect(field).toHaveAttribute('readonly');
-    // Re-pick a different customer via the ✕ control.
+    // Re-pick a different customer via the clear control.
     vi.mocked(searchCustomers).mockResolvedValue([
       { id: 'c2', firstName: 'John', lastName: 'Doe', phone: '5', dob: '01-Jan-1990' },
     ]);

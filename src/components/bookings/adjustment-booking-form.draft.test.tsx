@@ -8,8 +8,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { clearDraft, readDraft, StoredDraft, writeDraft } from '@/utils/formDraft';
 import { FUTURE_ARR_DATE, FUTURE_DEP_DATE } from '@/test-utils/dates';
 
-// Finding 6: import the REAL draft-state type from the component rather than hand-mirroring it —
-// a hand-copied `TestDraftState` interface is the same duplication class Finding 3 removed from
+// Import the REAL draft-state type from the component rather than hand-mirroring it —
+// a hand-copied `TestDraftState` interface is the same duplication removed from
 // the source (`AdjustmentShared`/`AdjustmentSharedValue`): the two shapes can silently drift, and
 // nothing would catch it until a real restore broke in a way no test could reproduce.
 function writeTestDraft(userId: string, key: 'booking:reissue' | 'booking:refund', state: AdjustmentDraftState): void {
@@ -59,7 +59,7 @@ const PAX_A: bookingsApi.BookingRow = {
 const PAX_B: bookingsApi.BookingRow = { ...PAX_A, id: 'p2', passengerName: 'JOSEPH/ANTON', amount: 75 };
 
 /** A realistic `shared` fixture — every field populated, not `{}` — so a restore test that reads
- * one of these back actually proves the round-trip, per Finding 4. */
+ * one of these back actually proves the round-trip. */
 // depDate/arrDate MUST be computed relative to "now", not hardcoded — a Reissue's Departure/Arrival
 // Date floors at the agency's today (see booking-form.tsx's/adjustment-booking-form.tsx's
 // `minTripDate`), so a fixed literal rots the instant it slips into the past: the hidden native
@@ -151,7 +151,7 @@ describe('AdjustmentBookingForm drafts', () => {
     // The restored form must still know p1 already landed, AND must have actually restored the
     // shared trip/payment fields and the passenger group/amounts — not just re-typed the PNR.
     // Asserting on multiple, REALISTIC (non-empty) fields is what makes this a genuine round-trip
-    // test rather than a hollow one (Finding 4).
+    // test rather than a hollow one.
     await waitFor(
       () => {
         const stored = readTestDraft('u1', 'booking:reissue');

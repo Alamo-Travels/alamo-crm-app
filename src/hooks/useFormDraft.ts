@@ -23,31 +23,19 @@ export interface UseFormDraftResult<T> {
    * by the Cancel confirmation's "Keep as draft" — an explicit instruction, not an accident. */
   keep: () => void;
   /**
-   * Writes to storage IMMEDIATELY, bypassing the 500 ms debounce — and, unlike `keep`, does NOT
-   * touch `pending` (a restore bar must not be dismissed by this).
+   * Writes to storage immediately, bypassing the debounce, and deliberately does NOT clear
+   * `pending` (a restore bar must not be dismissed by this).
    *
-   * For a form whose state changes in a tight, fast loop (e.g. one API call per row in a
-   * sequential submit), every `setState` call restarts the debounce timer rather than ever letting
-   * it fire — if the loop is faster than 500 ms of quiescence, ordinary autosave may never write
-   * at all until the whole loop finishes, which is too late if the user abandons mid-loop.
-   * `flush()` is the escape hatch: call it right after a state change whose loss would be
-   * unacceptable (e.g. right after a row's own the API call has already succeeded).
+   * Needed because a tight submit loop restarts the debounce on every `setState`, so ordinary
+   * autosave may not write until the loop ends — too late if the user abandons mid-loop. Call it
+   * right after a state change whose loss would be unacceptable.
    *
-   * Accepts an optional explicit `stateOverride` — take it when the caller's own closure cannot
-   * see the JUST-updated value yet (a `setState` call earlier in the same synchronous block has not
-   * re-rendered), which is the normal case for exactly the scenario this exists for. Falls back to
-   * the hook's own `state` prop (the value as of the render that produced this `flush` reference)
-   * when omitted.
+   * Pass `stateOverride` when the caller's closure cannot see a `setState` from earlier in the
+   * same synchronous block, which is the normal case here.
    *
-   * `pending` (an unresolved restore bar) is NOT guaranteed to be null when `flush` is called — the
-   * bar is non-blocking, so a user can leave it unresolved, submit anyway, and have this fire mid
-   * submit. `flush` overwrites storage regardless, and that is the intended, accepted trade-off, not
-   * an oversight: the restore bar renders from its own in-memory `pending` SNAPSHOT, not from
-   * storage, so overwriting storage does not change what is currently on screen — and the record
-   * that replaces the old one is a statement of genuinely-posted work, which is more valuable than
-   * whatever the overwritten draft held. Do not add a `pending` guard here to "protect" the bar; it
-   * needs no protection, and the caller (`adjustment-booking-form.tsx`) separately unions rather
-   * than replaces `succeeded` on restore for the same reason.
+   * It overwrites storage even with a restore bar unresolved. That is intended: the bar renders
+   * from its own in-memory snapshot, so this cannot change what is on screen, and a record of
+   * genuinely posted work beats the draft it replaces. Do not add a `pending` guard.
    */
   flush: (stateOverride?: T) => void;
 }

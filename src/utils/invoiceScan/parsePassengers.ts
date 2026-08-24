@@ -94,27 +94,14 @@ function readForBlock(lines: string[]): { name: string; child: boolean }[] {
     }
     // A blank line closes the block on a clean scan — the documented terminator.
     if (line.trim() === '') break;
-    // Defensive, NOT proven on a real scan: guards against OCR dropping the blank-line
-    // delimiter itself. A line back at the left margin (no leading indent) reads as the start
-    // of the next section (e.g. a flight-date line), not a continuation name, so stop rather
-    // than risk absorbing unrelated text as a phantom passenger. See
-    // parsePassengers.test.ts for the pinned "phantom passenger" direction.
-    // NO indentation requirement. This previously broke the block on any line not starting with
-    // whitespace, which read as "back at the left margin = next section". That was written against
-    // indented fixtures and is WRONG on a real scan: Tesseract in PSM 6 normalises the leading
-    // whitespace away, so every continuation name arrives at column 0 and the block ended after
-    // the FIRST name. Browser-reported as "only one passenger is recognised"; reproduced by
-    // running the real OCR over testDocs/Multi.pdf, which yields
-    //   FOR: PAUL/PHYLIEX JAMES / BABU/ATHIRA / PAUL/MICHAELA ROSE CHD
-    // with no indentation at all. The slash rule below is what actually separates a name from the
-    // next section, and it does so without depending on whitespace the OCR does not preserve.
-    // Defensive, NOT proven on a real scan: LAST/FIRST always carries a slash, so a continuation
-    // line missing one is either OCR noise or a genuine continuation name whose slash was
-    // itself OCR'd away. Either way this ends the block early rather than guess — a dropped
-    // blank line combined with a dropped slash could otherwise absorb an unrelated line as a
-    // passenger. The cost (a truncated block on the rarer OCR failure) is accepted in favor of
-    // never inventing a name. See parsePassengers.test.ts for the pinned "dropped slash"
-    // direction.
+    // The block ends at a line that is not shaped like `LAST/FIRST`. There is deliberately NO
+    // indentation requirement: Tesseract in PSM 6 normalises leading whitespace away, so every
+    // continuation name arrives at column 0, and an indent check ended the block after the first
+    // name (browser-reported, reproduced against a real scan).
+    //
+    // A continuation line whose slash was itself OCR'd away also ends the block. Truncating on
+    // that rarer failure is preferred to absorbing an unrelated line as a phantom passenger; both
+    // directions are pinned in parsePassengers.test.ts.
     if (!CONTINUATION_NAME.test(line.trim())) break;
     names.push(splitChild(line.trim()));
   }

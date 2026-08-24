@@ -14,7 +14,7 @@ interface SearchInputProps {
 }
 
 /**
- * A debounce-agnostic text search box with a trailing ✕ that clears the input in one click.
+ * A debounce-agnostic text search box with a trailing clear button that empties the input in one click.
  * The clear button only renders when there is something to clear. The `aria-label` lands on the
  * inner `<input>`, so existing `getByLabelText(...)` queries keep resolving to the field itself.
  */

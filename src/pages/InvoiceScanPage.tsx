@@ -59,7 +59,7 @@ function canAttemptSave(invoice: ReviewInvoice): boolean {
  * the operator never having seen the warning. This does NOT apply to the per-invoice Save button
  * — an operator who has actually opened this invoice and read the page image may legitimately
  * need to save it anyway (a real total can genuinely not match what OCR read); that override, kept
- * from fix round 2, stays available there. Only ever narrows the batch, never widens it: an invoice
+ * stays available there. Only ever narrows the batch, never widens it: an invoice
  * with no `netCcBilling` on file (nothing to reconcile against) always reconciles.
  *
  * The function itself now lives in `reviewInvoice.ts` and is SHARED with the amounts summary the
@@ -67,24 +67,17 @@ function canAttemptSave(invoice: ReviewInvoice): boolean {
  * look balanced on screen while the batch quietly skips it. */
 
 /**
- * Re-derives a row's status from its CURRENT data — but only for the statuses that are genuinely a
- * live derivation. `statusFor` can only ever return `'ready'` or `'attention'`; the other three
- * (`'saved'`, `'failed'`, `'duplicate'`) record what happened on a save attempt, which no amount of
- * editing can un-happen.
+ * Re-derives a row's status from current data, but only for the two statuses that are a live
+ * derivation. `statusFor` returns only `'ready'` or `'attention'`; `'saved'`, `'failed'` and
+ * `'duplicate'` record what a save attempt did, which editing cannot un-happen.
  *
- * **`'saved'` is TERMINAL.** Recomputing it unconditionally (the original behaviour of both
- * `mergeResolved` and `handleDetailChange`) flipped an invoice already written to the ledger back
- * to `'ready'` on any post-save edit — or on a city lookup that merely happened to resolve after
- * the save — which re-enabled Save on it. Worse, if that edit touched `invoiceNumber`,
- * `bookingDate` or `pnr`, the backend's own 409 duplicate check could no longer catch the second
- * write either, because the dedupe triple no longer matched the row just created. `clearDuplicate`
- * already guarded its recompute on the current status; this is the same rule, applied everywhere.
+ * `'saved'` IS TERMINAL. Recomputing it flipped an already-written invoice back to `'ready'` on
+ * any later edit — even a city lookup resolving after the save — re-enabling Save. Worse, if that
+ * edit touched `invoiceNumber`, `bookingDate` or `pnr`, the backend's 409 duplicate check could no
+ * longer catch the second write, because the dedupe triple no longer matched.
  *
- * `'duplicate'` is likewise preserved: the amber decision panel is driven by the `duplicates` map,
- * and "Go back" (`clearDuplicate`) is the one path that deliberately returns it to a live status.
- *
- * `'failed'` stays retryable — `canAttemptSave` permits it — but an edit that makes the invoice
- * INCOMPLETE must still block, so a recomputed `'attention'` wins over it.
+ * `'duplicate'` is preserved likewise; `clearDuplicate` is the one path that returns it to a live
+ * status. `'failed'` stays retryable, but a recomputed `'attention'` still wins over it.
  */
 function recomputeStatus(invoice: ReviewInvoice): ReviewStatus {
   if (invoice.status === 'saved' || invoice.status === 'duplicate') return invoice.status;
@@ -257,7 +250,7 @@ export default function InvoiceScanPage() {
     );
   }
 
-  /** Fix round 2, Minor 4: an already-posted passenger's amount is deliberately NEVER re-sent (see
+  /** An already-posted passenger's amount is deliberately NEVER re-sent (see
    * `saveScannedAdjustment`'s skip logic) — correct, since adjustments have no duplicate-invoice
    * 409 to catch a re-post. But silently ignoring an operator's correction is its own bug: if they
    * edit passenger 1's amount after its adjustment succeeded, then re-save, nothing told them the
@@ -433,7 +426,7 @@ export default function InvoiceScanPage() {
   }
 
   // Auto-resolves `airlineCode`/`depCity`/`arrCity` from the raw OCR'd text (`airlineName`/
-  // `depCityText`/`arrCityText`) — the fix round 3 Critical: these three were NEVER wired to
+  // `depCityText`/`arrCityText`) — these three were NEVER wired to
   // `resolve.ts`'s existing airline/airport resolvers (only the customer resolver, in
   // `scan-passenger-rows.tsx`, was ever actually called), so `airlineCode` in particular stayed
   // permanently null and every New invoice's "Save all ready" 400'd at the backend's

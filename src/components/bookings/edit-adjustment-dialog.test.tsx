@@ -186,26 +186,14 @@ describe('EditAdjustmentDialog', () => {
     await user.type(pnr, 'USERTYPED1');
     expect(pnr).toHaveValue('USERTYPED1');
 
-    // Simulate a background refetch of the SAME adjustment (e.g. some other mutation's
-    // ['bookings'] invalidation) that returns CHANGED DATA — this forces a new object identity
-    // through TanStack Query's structuralSharing (ON by default). Without a real data change,
-    // structuralSharing would hand back the previous object reference, `data`'s identity would
-    // never change, and this guard would be hollow — unable to detect a regression if a
-    // reset-on-`detail`-change effect were accidentally introduced into `AdjustmentEditForm`.
+    // A background refetch returning CHANGED data, which is what forces a new object identity
+    // through TanStack Query's structuralSharing (on by default). Without a real change it hands
+    // back the previous reference and this guard would be hollow.
     //
-    // The refetch also changes `passengerName` (not just `pnr`/`amount`). `AdjustmentEditForm`
-    // renders `<p>Passenger: {detail.passengerName}</p>` directly from the `detail` prop — not
-    // through any piece of form state — so it re-renders with the new name the instant the new
-    // query data commits, regardless of what the form's own state does. That makes it a
-    // deterministic DOM signal that the refetched data has actually propagated into the component
-    // tree and React has flushed. `waitFor(() => expect(getAdjustment).toHaveBeenCalledTimes(2))`
-    // would only prove the MOCK FUNCTION was invoked a second time — that resolves as soon as the
-    // queryFn call happens, which is before React commits the new data (let alone runs any
-    // hypothetical reset effect reacting to it). Asserting on the form fields right after such a
-    // `waitFor` would race ahead of the re-render, so a reset-on-`detail`-change bug could still
-    // wipe the form a tick later without this test ever seeing it. Waiting for the passenger line
-    // to show the new name is the proof the new data landed; only then is asserting "the form
-    // didn't reset" meaningful.
+    // It changes `passengerName`, which renders straight from the `detail` prop, so the assertion
+    // can wait on that DOM signal rather than the mock's call count: the latter resolves before
+    // React commits, so asserting immediately after races ahead of the re-render and a reset bug
+    // could wipe the form a tick later unseen.
     vi.mocked(bookingsApi.getAdjustment).mockResolvedValue({
       ...REISSUE_DETAIL,
       passengerName: 'CHANGED/PASSENGER',

@@ -177,7 +177,7 @@ export default function ScanInvoiceDetail({ invoice, pageImages, onChange, resol
    * The id of the invoice a void confirmation is currently open for, or `null`.
    *
    * This is the component's ONLY piece of local state and it is deliberately UI-transient, not data
-   * — no field value is mirrored here (that was the `voidWarningVisible` mistake fix round 1
+   * — no field value is mirrored here (that was the `voidWarningVisible` mistake an earlier fix
    * removed; the Voided warning below is still a pure derivation from `invoice.type`). Storing the
    * TARGET ID rather than a boolean is what keeps the "holds nothing about a specific invoice"
    * property honest: the dialog's `open` is `voidTargetId === invoice.id`, so switching the selected

@@ -11,22 +11,16 @@ export interface NavigationGuard {
 }
 
 /**
- * Holds a navigation until the user confirms, whenever `when` is true.
+ * Holds a navigation until the user confirms, whenever `when` is true. One registration covers
+ * in-app links and `navigate()`, browser and mouse Back/Forward (a blocked POP is undone with
+ * `go(1)`, so the address bar does not drift), and tab close or reload via `beforeunload`.
  *
- * Covers every way out of a page through ONE registration:
- *  - an in-app `<Link>` or `navigate()` (a history PUSH/REPLACE);
- *  - the browser's Back/Forward buttons and a mouse's back button (a POP — `@tanstack/history`
- *    restores the URL with `go(1)` after a blocked pop, so the address bar does not drift);
- *  - closing the tab, reloading, or typing another URL (`beforeunload`, which shows the
- *    browser's own prompt — its wording is not ours to set).
+ * `enableBeforeUnload` is a FUNCTION, never a bare `true` — as a constant, every reload prompts,
+ * including one with nothing to lose.
  *
- * `enableBeforeUnload` is passed as a FUNCTION, never a bare `true`. As a constant it would make
- * every reload of the page prompt, including one with nothing to lose.
- *
- * Both callbacks read `when` through a ref and are `useCallback`-stable, so the blocker registers
- * once and then reads the current value on each navigation. Passing `when` directly would give
- * `shouldBlockFn` a new identity on every render, and `useBlocker` lists it in its effect deps —
- * so the history blocker would be torn down and re-registered on every render of the host page.
+ * Both callbacks read `when` through a ref and are `useCallback`-stable so the blocker registers
+ * once. Passing `when` directly would give `shouldBlockFn` a new identity every render, and
+ * `useBlocker` lists it in its effect deps, tearing down and re-registering the blocker each time.
  */
 export function useNavigationGuard(when: boolean): NavigationGuard {
   const whenRef = useRef(when);

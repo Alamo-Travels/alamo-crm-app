@@ -175,7 +175,7 @@ describe('EnquiryDetailPage', () => {
     expect(screen.queryByText(/Cruise destination/)).not.toBeInTheDocument();
   });
 
-  // final-review Minor 3 (2026-08-08): `buildTrip()` omits `tripType`/`segments` for a
+  // `buildTrip()` omits `tripType`/`segments` for a
   // non-flight kind, so Mongoose's `default: 'round'`/`default: []` apply — a REAL cruise
   // or tour enquiry from the website carries exactly this shape (empty segments, tripType
   // 'round'), not the flight-shaped fixture the two tests above reuse for convenience.

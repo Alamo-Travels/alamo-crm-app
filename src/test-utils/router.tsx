@@ -9,24 +9,18 @@ import {
 } from '@tanstack/react-router';
 
 /**
- * A throwaway router wrapping one element, for component tests.
+ * A throwaway router wrapping one element, for component tests. Needed because any TanStack Router
+ * hook throws outside a `RouterProvider`.
  *
- * Needed because a component that calls any TanStack Router hook — `useBlocker`, via
- * `useNavigationGuard` — throws outright when rendered without a `RouterProvider`. This is
- * deliberately NOT the real route tree from `router.tsx`: that one is guarded by auth/permission
- * `beforeLoad` redirects and would drag every page test into session setup. Tests that need the
- * real tree use `router.test.tsx`'s `renderApp` instead.
+ * Deliberately NOT the real route tree, which is guarded by auth `beforeLoad` redirects and would
+ * drag every page test into session setup; tests needing it use `router.test.tsx`'s `renderApp`.
  *
- * The element hangs off the ROOT route, so it stays mounted across a navigation between the two
- * child paths below. That is what lets a blocker test observe "the navigation was held" rather
- * than "the component unmounted".
+ * The element hangs off the ROOT route so it stays mounted across a navigation, which is what lets
+ * a blocker test observe "the navigation was held" rather than "the component unmounted".
  */
 /**
- * The two paths the throwaway router serves. They are deliberately REAL app paths: TanStack
- * Router's module augmentation in `router.tsx` types `navigate({ to })` against the registered
- * route tree globally, so a made-up path like '/there' type-checks fine under vitest but fails
- * `npm run build`. (This repo has been caught by exactly that gap before — a green test run is
- * not a type check.)
+ * Deliberately REAL app paths: module augmentation types `navigate({ to })` against the registered
+ * route tree globally, so a made-up path type-checks under vitest but fails `npm run build`.
  */
 export const TEST_ROUTE_HERE = '/bookings/scan';
 export const TEST_ROUTE_THERE = '/bookings';

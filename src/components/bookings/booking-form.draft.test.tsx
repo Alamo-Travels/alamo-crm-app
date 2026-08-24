@@ -160,7 +160,7 @@ describe('BookingForm drafts', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  // M3 fix: bookingDate used to be excluded entirely from the emptiness predicate, so changing
+  // bookingDate used to be excluded entirely from the emptiness predicate, so changing
   // ONLY the Booking Date (e.g. back-dating a historic invoice) and pressing Cancel closed with no
   // confirmation and no draft. The predicate now compares against what THIS form was seeded with
   // (see isBookingDraftEmpty's docstring) instead of ignoring the field.

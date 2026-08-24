@@ -59,7 +59,7 @@ describe('buildResolver', () => {
     await expect(resolver.customer('JACOB/SHIBIN')).resolves.toBeNull();
   });
 
-  // Fix round 1 — Critical 1: GET /customers/search substring-matches the WHOLE query string
+  // GET /customers/search substring-matches the WHOLE query string
   // against ONE field at a time ($or: [firstName, lastName, middleName]), so a space-joined
   // "Last First Middle" query can never be a substring of any single stored field. The resolver
   // must query on a single field (the last name) and push precision into a client-side filter.
@@ -72,7 +72,7 @@ describe('buildResolver', () => {
     expect(customers.searchCustomers).toHaveBeenCalledWith('JACOB');
   });
 
-  // Fix round 1 — Critical 2: a shared surname must not be enough to auto-link. The old loose
+  // A shared surname must not be enough to auto-link. The old loose
   // fallback ("only one raw result came back") would wrongly attach this booking to c1 even
   // though the given name doesn't match at all.
   it('does not auto-link a candidate whose surname matches but given name does not', async () => {
@@ -89,7 +89,7 @@ describe('buildResolver', () => {
     await expect(resolver.airline('ETIHAD AIRWAYS')).resolves.toBeNull();
   });
 
-  // Fix round 1 — Important 3: a transient failure (network blip) must not be cached as a
+  // A transient failure (network blip) must not be cached as a
   // permanent null — the next invoice for the same airline should get a fresh attempt, not
   // inherit the first blip's failure for the rest of the session.
   it('retries after a transient failure instead of caching it as a permanent null', async () => {

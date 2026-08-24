@@ -126,7 +126,7 @@ describe('BookingForm duplicate-invoice warning', () => {
     expect(screen.getByLabelText('Invoice#')).toHaveValue('000005');
   });
 
-  // FINDING 7: the round trip above only ever exercised the CREATE branch (`renderForm()` with no
+  // The round trip above only ever exercised the CREATE branch (`renderForm()` with no
   // `initial`). The spec asked for both dialogs — Edit hits the exact same 409 from
   // `updateBooking`, and "Save anyway" must re-submit through `updateBooking` (not `createBooking`)
   // with the booking's own id and `confirmDuplicate: true`.

@@ -36,29 +36,22 @@ interface LinkedDisplay {
 }
 
 /**
- * Passenger rows for one scanned invoice: the OCR'd name (fixed — it's what the operator matches
- * AGAINST, never hand-edited), a customer picker, and an editable amount (OCR misreads amounts
- * roughly one in six times on real scans, so this is the field most likely to need a fix).
+ * Passenger rows for one scanned invoice: the OCR'd name (fixed — it is what the operator matches
+ * against), a customer picker, and an editable amount (OCR misreads amounts roughly one in six
+ * times, so it is the field most likely to need a fix).
  *
- * Every non-Voided passenger must resolve to a real Customer before the invoice can be saved —
- * stricter than the .xlsx importer, and deliberately with NO grandfathering exemption (unlike
- * booking-form.tsx's historic-unlinked-row carve-out): every row here is data freshly read off a
- * scan, not a years-old ledger entry, so there is nothing to grandfather past the gate.
+ * Every non-Voided passenger must resolve to a real Customer before saving, with NO grandfathering
+ * exemption unlike booking-form.tsx: every row here is freshly read off a scan, not a years-old
+ * ledger entry.
  *
- * **MUST be keyed on `invoice.id` by its caller (see `scan-invoice-detail.tsx`'s call site).**
- * This component owns real per-invoice local state (which row is searching, the resolved matches,
- * the `linked` display-name cache) — reusing the same instance across an invoice switch (i.e. no
- * key, or the same key) leaves that state pointing at the WRONG invoice: auto-link stops firing
- * for every invoice after the first one mounted, and a customer suggestion opened on one invoice
- * can be clicked after switching and link onto a completely different invoice's passenger. Fix
- * round 1 found and closed this the hard way (two independent reviewers, empirically proven) —
- * do not remove the key as "redundant" without re-reading that history.
+ * MUST be keyed on `invoice.id` by its caller. This owns real per-invoice state (which row is
+ * searching, resolved matches, the display-name cache), so reusing the instance across an invoice
+ * switch points that state at the wrong invoice: auto-link stops firing after the first, and a
+ * suggestion opened on one invoice can link onto another's passenger. Found and closed the hard
+ * way; do not remove the key as redundant.
  *
- * Relies on an ANCESTOR `QueryClientProvider` for its own customer search (`useQuery`, mirroring
- * `CodeSearchField`/`booking-form.tsx`'s picker) and for the nested `AddEditCustomerDialog`'s
- * `useMutation` — the app-wide one mounted in `main.tsx` in production; every test wraps its own
- * `render()` the same way every other `QueryClientProvider`-needing consumer's tests do (see
- * `code-search-field.test.tsx`'s `Harness`, `scan-invoice-detail.test.tsx`'s `Harness`).
+ * Relies on an ancestor `QueryClientProvider` for its customer search and the nested
+ * `AddEditCustomerDialog`.
  */
 export default function ScanPassengerRows({ invoice, onChange, resolver }: ScanPassengerRowsProps) {
   const user = useAuthStore((s) => s.user);

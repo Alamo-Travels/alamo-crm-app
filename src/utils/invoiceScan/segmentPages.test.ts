@@ -38,7 +38,7 @@ describe('segmentPages', () => {
     expect(segmentPages([])).toEqual([]);
   });
 
-  // Regression coverage for a shipped Critical (Task 8 fix round 2): an unreadable page (no OCR
+  // An unreadable page (no OCR
   // text at all, so it can never carry a `PAGE: 01` line) must still start a new group. Without
   // this, an unreadable page that WAS an invoice's boundary silently folds itself — and every
   // real page after it up to the next detected boundary — into the PRECEDING invoice, and the

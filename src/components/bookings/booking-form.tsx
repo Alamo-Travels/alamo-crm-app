@@ -250,7 +250,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
   );
 
   /** Whether a row must be linked before this form can be saved. A grandfathered row is exempt only
-   * while it still holds its stored name — clearing the name (via ✕, or on a row the user blanked)
+   * while it still holds its stored name — clearing the name (via the clear button, or on a row the user blanked)
    * means they're re-entering the passenger, and re-entered data follows the new-data rule. */
   function needsCustomer(p: PassengerRow): boolean {
     if (p.customer) return false;
@@ -703,7 +703,7 @@ export function BookingForm({ initial, typeSelector, onDone, onCancel }: Booking
                     }
                   />
                   {/* A historic (originally-unlinked) row keeps its stored name in state while the
-                      user re-searches; surface it so they know who to match. A ✕-cleared selected
+                      user re-searches; surface it so they know who to match. A cleared selected
                       row has name '' here, so this only shows for the historic case. */}
                   {searching && !passenger.customer && passenger.name.trim().length > 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">Originally recorded as {passenger.name}</p>

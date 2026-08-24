@@ -8,7 +8,7 @@
  * the command above, then reverting vite.config.ts. See task-1-report.md, "Deviation 2".)
  *
  * Renders the reference scans, OCRs them, and reports how accurately the fields
- * that matter survive. This is the feature's go/no-go gate — see Task 1 of the plan.
+ * that matter survive. This is the feature's go/no-go gate.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -56,7 +56,7 @@ async function pdfToPageTexts(file: string): Promise<string[]> {
 
   const worker = await createWorker('eng');
   // PSM.SINGLE_BLOCK ('6') = "assume a single uniform block of text", correct for a fixed-width
-  // report. tessedit_pageseg_mode is typed as the PSM enum, not a raw string — see fix round 1.
+  // report. tessedit_pageseg_mode is typed as the PSM enum, not a raw string.
   await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
 
   const texts: string[] = [];

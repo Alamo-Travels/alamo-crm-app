@@ -19,8 +19,8 @@ function ocrPage(pageNumber: number, ...lines: string[]): OcrPage {
 // — with no indication to the caller which page was the problem. Tasks 3-6 are built around
 // flagging bad reads via `issues[]` and carrying on; a hard throw was a different failure class.
 //
-// A first version of this fix (fix round 1) isolated the failure but represented an unreadable
-// page as an EMPTY OcrPage (`lines: []`). That was itself a shipped Critical (fix round 2): an
+// A first version of this fix isolated the failure but represented an unreadable
+// page as an EMPTY OcrPage (`lines: []`). That was itself a shipped bug: an
 // empty page can never carry `segmentPages`' `PAGE: 01` marker, so if the failed page happened to
 // be an INVOICE BOUNDARY, the boundary became invisible and the failed page — plus every real
 // page after it up to the next detected boundary — silently folded into the PRECEDING invoice.

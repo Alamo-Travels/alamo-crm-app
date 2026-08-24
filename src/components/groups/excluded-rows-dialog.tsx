@@ -21,21 +21,17 @@ interface ExcludedRowsDialogProps {
 /**
  * Lists the rows checked off this group and lets them be restored.
  *
- * Backed by GET /groups/:id/results?excluded=true, which deliberately IGNORES the group's
- * conditions — a row that was excluded and has since stopped matching must still appear here, or
- * it could never be restored (this dialog is the only surface that can restore one).
+ * Backed by an endpoint that deliberately IGNORES the group's conditions: a row that was excluded
+ * and has since stopped matching must still appear, or it could never be restored, and this is the
+ * only surface that can restore one.
  *
- * Restore is bulk-only via the selection column: the results table has no row-actions column and
- * adding one solely for this is unwarranted — selecting a single row covers the one-row case.
+ * Restore is bulk-only via the selection column; selecting a single row covers the one-row case.
  *
- * The stateful body lives in ExcludedRowsDialogBody, rendered INSIDE DialogContent — the caller
- * (GroupResultsPage) mounts this component gated on `group`, not on `open`, so the outer
- * ExcludedRowsDialog instance never unmounts when the dialog closes. Radix's DialogContent DOES
- * unmount on close (no forceMount), so keeping page/sorting/columnVisibility/rowSelection state
- * inside it means every reopen gets a fresh mount and fresh `useState` initializers — otherwise a
- * selection made in one open/close cycle (closed via Esc/X/click-outside, never restored) would
- * survive into the next and let "Restore selected" restore rows the user never re-confirmed in
- * this session. Same key-based-remount pattern as EditBookingDialog.
+ * The stateful body lives in ExcludedRowsDialogBody INSIDE DialogContent. The caller mounts this
+ * gated on `group`, not on `open`, so the outer component never unmounts — but Radix does unmount
+ * DialogContent, so keeping the state there gives every reopen a fresh mount. Otherwise a
+ * selection made and abandoned in one cycle would survive into the next and let "Restore selected"
+ * restore rows the user never re-confirmed.
  */
 export function ExcludedRowsDialog({ open, onOpenChange, groupId, view }: ExcludedRowsDialogProps) {
   return (

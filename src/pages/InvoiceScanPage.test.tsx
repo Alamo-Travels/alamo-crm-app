@@ -70,7 +70,7 @@ const INVOICE = {
 
 const VOIDED_INVOICE = { ...INVOICE, invoiceNumber: '0000900', type: 'Voided' as const };
 
-// Fix round 3: a resolved match for INVOICE's `airlineName` ('ETIHAD AIRWAYS') — used by every
+// A resolved match for INVOICE's `airlineName` ('ETIHAD AIRWAYS') — used by every
 // test below that needs a New invoice to actually reach Ready (New requires a resolved
 // `airlineCode`, auto-resolved from this exact text; see InvoiceScanPage.tsx's new effect).
 const AIRLINE_MATCH = { code: 'EY', label: 'Etihad Airways' };
@@ -351,9 +351,9 @@ describe('InvoiceScanPage', () => {
     // The stale suggestion must not survive the switch: if it did, it would still be clickable
     // and would write IAH into invoice B's depCity instead of invoice A's. This is the actual
     // regression this test guards — the remount-key reset of CodeSearchField's own local
-    // query/dropdown state — and is unaffected by fix round 3's auto-resolution below.
+    // query/dropdown state — and is unaffected by the auto-resolution below.
     expect(screen.queryByRole('option', { name: /Houston/i })).not.toBeInTheDocument();
-    // Fix round 3: invoice B's Departure City is no longer blank here — its OWN `depCityText`
+    // Invoice B's Departure City is no longer blank here — its OWN `depCityText`
     // ("DALLAS") now auto-resolves via the same lazy-on-selection effect that resolves
     // airlineCode (see InvoiceScanPage.tsx), and the mocked `searchAirports` in this file always
     // returns the one IAH match regardless of query text. This is invoice B's OWN legitimate
@@ -410,22 +410,14 @@ describe('InvoiceScanPage repeat upload', () => {
     expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
   });
 
-  // NOTE ON WHAT IS **NOT** TESTED HERE, and why — the per-batch invoice ids.
+  // NOT TESTED HERE, deliberately: that per-batch invoice ids stop batch N's id-keyed state
+  // applying to batch N+1.
   //
-  // I5's second half was that ids regenerate identically across uploads (`scan-0`, `scan-1`, …),
-  // which in principle lets any id-keyed state from batch N apply to batch N+1 — including the
-  // `${invoice.id}-dep-city` remount keys that exist precisely to stop a stale `CodeSearchField`
-  // dropdown writing into the wrong invoice. Ids are now `scan-<batch>-<index>`.
-  //
-  // A probe was written for the obvious consequence (type into Departure City, re-upload without
-  // dismissing the dropdown, expect the stale option gone) and it PASSED against the pre-fix code,
-  // i.e. it proved nothing. The reason is worth recording: `handleFile` calls `setInvoices([])`
-  // synchronously before awaiting the scan, so `invoices.length > 0` goes false and the ENTIRE
-  // master-detail grid unmounts for the duration of the scan — every child's local state goes with
-  // it regardless of any key. The id collision therefore has no observable consequence today; the
-  // per-batch state reset above is what actually closes I5, and unique ids are defence in depth
-  // against a future refactor that stops clearing (or stops unmounting). A hollow test asserting
-  // otherwise was deliberately not kept.
+  // A probe for the obvious consequence PASSED against the pre-fix code, i.e. proved nothing.
+  // `handleFile` calls `setInvoices([])` synchronously before awaiting the scan, so the whole
+  // master-detail grid unmounts for the scan's duration and every child's local state goes with it
+  // regardless of any key. The id collision has no observable consequence today; unique ids are
+  // defence in depth against a refactor that stops unmounting. A hollow test was not kept.
 });
 
 // --- Final review, minor: no terminal `saved` state ------------------------------------------
@@ -642,12 +634,12 @@ describe('InvoiceScanPage saving', () => {
     expect(screen.getByText('Booking date is required')).toBeInTheDocument();
   });
 
-  // Fix round 1, Critical 1: a null passenger amount ALWAYS raises an issue (see
+  // A null passenger amount ALWAYS raises an issue (see
   // parsePassengers.ts's `missingAmounts` check) and previously the Save button was gated only on
   // `status !== 'saved'` — so an operator could click Save on an invoice whose amount field is
   // visibly blank and it would write a real $0 into the ledger with no warning. The customer is
   // deliberately auto-linked here (searchCustomers resolves a unique match) so the ONLY remaining
-  // reason this invoice isn't Ready is the unread amount — isolating this test from Important 3
+  // reason this invoice isn't Ready is the unread amount — isolating this test from the
   // below.
   it('never lets Save write a blank/unread amount as a silent $0 — Save stays disabled', async () => {
     const MATCH: customersApi.CustomerSearchResult = {
@@ -678,7 +670,7 @@ describe('InvoiceScanPage saving', () => {
     expect(bookings.createBooking).not.toHaveBeenCalled();
   });
 
-  // Fix round 1, Important 3: scan-passenger-rows.tsx documents that every non-Voided passenger
+  // scan-passenger-rows.tsx documents that every non-Voided passenger
   // must resolve to a real Customer before saving, "with NO grandfathering exemption" — but the
   // same ungated Save button let an unlinked passenger through too. The default customersApi mock
   // (no match) keeps this passenger unlinked, isolating this test from the amount case above.
@@ -699,7 +691,7 @@ describe('InvoiceScanPage saving', () => {
     expect(bookings.createBooking).not.toHaveBeenCalled();
   });
 
-  // Fix round 1, Critical 2: a duplicate outcome used to leave `status` untouched, so a 409 hit
+  // A duplicate outcome used to leave `status` untouched, so a 409 hit
   // during "Save all ready" left that row's badge reading "Ready" — visually identical to a row
   // nobody had attempted. This proves the badge now reads something else, AND that a batch summary
   // makes the mixed outcome visible without clicking into any row.
@@ -747,7 +739,7 @@ describe('InvoiceScanPage saving', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('1 needs a decision'));
   });
 
-  // Fix round 1's Important 4 is REVERSED by the final review's I2 fix, and deliberately so. That
+  // An earlier rule here was REVERSED, deliberately. That
   // round disabled the batch while Pending because ONE typed "Amount owed" figure was applied to
   // every invoice the batch touched, and different invoices genuinely owe different balances. There
   // is no such shared figure any more — each passenger owes its own ticket price — so the batch is
@@ -864,14 +856,14 @@ describe('InvoiceScanPage saving', () => {
     expect(sent.passengers.every((p) => p.payment?.status === 'paid')).toBe(true);
   });
 
-  // Fix round 1's Minor 2 ("requires a positive Amount owed before a Pending invoice can be saved")
+  // An earlier rule ("requires a positive Amount owed before a Pending invoice can be saved")
   // is deleted rather than rewritten: it pinned a client-side guard on a control that no longer
   // exists, and the condition it protected against — a blank/zero shared figure reaching the
   // backend's `amount > 0` refine — is now unrepresentable, since the figure IS the passenger's own
   // ticket amount and `statusFor` already blocks Ready while any passenger amount is unread. The
   // two "own balance" tests above are its replacement.
 
-  // Task 13: Reissue/Refund now save as an adjustment against the resolved original passenger,
+  // Reissue/Refund now save as an adjustment against the resolved original passenger,
   // rather than the previous "not available yet" dead end. Both auto-resolutions (customer link
   // via ScanPassengerRows, original passenger via ScanAdjustmentParent) must settle before Save
   // is reachable — proving this end-to-end through the real page is what actually exercises the
@@ -921,10 +913,10 @@ describe('InvoiceScanPage saving', () => {
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['sales'] }));
   });
 
-  // Fix round 2, THE central regression: `issues` is a frozen scan-time snapshot — nothing ever
-  // recomputed it — and gating Save on `status === 'ready'` (fix round 1's own fix) meant an
+  // THE central regression: `issues` is a frozen scan-time snapshot — nothing ever
+  // recomputed it — and gating Save on `status === 'ready'` meant an
   // invoice carrying the single most common OCR finding (a blank/unread passenger amount, ~1 in 6
-  // per Task 1's own measurement) could NEVER become Ready again, even after the operator typed in
+  // measured at roughly 1 in 6) could NEVER become Ready again, even after the operator typed in
   // the correct figure. `statusFor` no longer gates on `issues` at all — issues are advisory
   // display text only; the LIVE passenger data is what's re-derived. This is the exact scenario the
   // reviewer's own probe used: blank amount, customer auto-linked, valid amount typed in.
@@ -933,7 +925,7 @@ describe('InvoiceScanPage saving', () => {
       id: 'c1', firstName: 'Shibin', middleName: 'Thomas', lastName: 'Jacob', dob: '01-Jan-1990',
     };
     vi.mocked(customersApi.searchCustomers).mockResolvedValue([MATCH]);
-    // Fix round 3: a New invoice also needs its airline auto-resolved to reach Ready — isolates
+    // A New invoice also needs its airline auto-resolved to reach Ready — isolates
     // this test to the amount exactly as the comment above says, now that airlineCode is ALSO a
     // live gate (see reviewInvoice.ts's statusFor).
     vi.mocked(flightDataApi.searchAirlines).mockResolvedValue([AIRLINE_MATCH]);
@@ -952,7 +944,7 @@ describe('InvoiceScanPage saving', () => {
       new File(['x'], 'stack.pdf', { type: 'application/pdf' })
     );
 
-    // Auto-link settles first — isolates this test to the amount, same as fix round 1's own test.
+    // Auto-link settles first — isolates this test to the amount.
     expect(await screen.findByText('Jacob/Shibin Thomas')).toBeInTheDocument();
     const saveButton = screen.getByRole('button', { name: /^save$/i });
     expect(saveButton).toBeDisabled();
@@ -970,7 +962,7 @@ describe('InvoiceScanPage saving', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Saved' })).toBeDisabled());
   });
 
-  // Fix round 2's Finding 4 residual and fix round 3's Minor both existed only because ONE
+  // Two earlier defects here existed only because ONE
   // page-level "Amount owed" string was shared by every save — it had to be cleared after a success,
   // and again on a selection change, or the NEXT invoice silently inherited the previous one's
   // figure. (The deleted companion test 'clears a Pending "Amount owed" figure on switching
@@ -1030,7 +1022,7 @@ describe('InvoiceScanPage saving', () => {
     );
   });
 
-  // Fix round 3, Critical: `airlineCode`/`depCity`/`arrCity` were NEVER wired to `resolve.ts`'s
+  // `airlineCode`/`depCity`/`arrCity` were NEVER wired to `resolve.ts`'s
   // existing airline/airport resolvers — only the customer resolver was ever actually called.
   // `airlineCode` in particular stayed permanently null, so a New invoice's own "Save all ready"
   // 400'd at the backend's `voided || (pnr && airlineCode)` refine on every single invoice. This
@@ -1061,7 +1053,7 @@ describe('InvoiceScanPage saving', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^save$/i })).toBeEnabled());
   });
 
-  // Fix round 3: `resolve.ts`'s memoisation only pays off if the SAME resolver instance persists
+  // `resolve.ts`'s memoisation only pays off if the SAME resolver instance persists
   // across invoice selections — a batch of dozens of invoices realistically repeats only a
   // handful of distinct airlines/cities. Two invoices sharing the identical `airlineName` must
   // trigger only ONE `searchAirlines` call total, not one per invoice.
@@ -1088,12 +1080,12 @@ describe('InvoiceScanPage saving', () => {
     expect(vi.mocked(flightDataApi.searchAirlines)).toHaveBeenCalledTimes(1);
   });
 
-  // Fix round 3, Important: a well-formed OCR misread (4,275.29 read as 4,215.29) leaves `amount`
+  // A well-formed OCR misread (4,275.29 read as 4,215.29) leaves `amount`
   // non-null, so the amount gate passes and the badge reads Ready — but the passenger total then
   // disagrees with the invoice's own printed NET CC BILLING, and the amber "Issues to review"
   // panel that would show this only ever renders for the SELECTED invoice. "Save all ready" must
   // skip such an invoice entirely rather than write the misread figure unattended; the individual
-  // Save button (fix round 2's "operator may override" case) must still work on the very same row.
+  // Save button (the "operator may override" case) must still work on the very same row.
   it('excludes a reconciliation mismatch from "Save all ready" but still allows the individual Save button', async () => {
     const MATCH: customersApi.CustomerSearchResult = {
       id: 'c1', firstName: 'Shibin', middleName: 'Thomas', lastName: 'Jacob', dob: '01-Jan-1990',
@@ -1139,7 +1131,7 @@ describe('InvoiceScanPage saving', () => {
     expect(bookings.createBooking).toHaveBeenLastCalledWith(expect.objectContaining({ invoiceNumber: '0000700' }));
   });
 
-  // Fix round 2, Important 1: the unit tests in `saveScannedInvoice.test.ts` pin the retry-skip
+  // The unit tests in `saveScannedInvoice.test.ts` pin the retry-skip
   // logic by HAND-FEEDING `adjustmentIds`/`adjustmentAmounts` — they prove the function behaves
   // correctly given that state, never that the PAGE actually produces it. Deleting
   // `recordAdjustmentProgress`'s body (or dropping the `onProgress` argument at its call site in
@@ -1239,7 +1231,7 @@ describe('InvoiceScanPage saving', () => {
     expect(p2Calls).toHaveLength(2); // the failed attempt, then the successful retry
   });
 
-  // Fix round 2, Minor 4: `saveScannedAdjustment` correctly skips an already-posted passenger on
+  // `saveScannedAdjustment` correctly skips an already-posted passenger on
   // retry (see the test above) — but silently ignoring an operator's correction is its own bug.
   // If they edit passenger 1's amount AFTER its adjustment already succeeded, then re-save, nothing
   // ever told them the new figure was never sent.
@@ -1330,7 +1322,7 @@ describe('InvoiceScanPage saving', () => {
     expect(p1Calls).toHaveLength(1);
   });
 
-  // Fix round 3: a resolved parent must not survive a PNR correction. The operator resolves the
+  // A resolved parent must not survive a PNR correction. The operator resolves the
   // original passenger against the OCR'd PNR, then reads the page image, sees the OCR misread a
   // character, and corrects it — the search re-runs and correctly shows "No original booking found
   // for this PNR", but before this fix the stale id was still sitting in `parentPassengerIds`, so

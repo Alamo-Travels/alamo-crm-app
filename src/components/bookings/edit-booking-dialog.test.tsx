@@ -145,26 +145,15 @@ describe('EditBookingDialog', () => {
     await user.type(screen.getByLabelText('Remark'), 'follow up needed');
     expect(screen.getByLabelText('Remark')).toHaveValue('follow up needed');
 
-    // Simulate a background refetch of the same booking (e.g. triggered by some other mutation's
-    // ['bookings'] invalidation) that returns CHANGED DATA — this forces a new object identity
-    // through TanStack Query's structuralSharing (which is ON by default). Without a real data
-    // change, structuralSharing would return the previous object reference unchanged, the `initial`
-    // prop identity would never change, and this guard test would be hollow, unable to detect a
-    // regression if a reset-on-initial-change effect were accidentally re-introduced.
+    // A background refetch returning CHANGED data, which is what forces a new object identity
+    // through TanStack Query's structuralSharing (on by default). Without a real change it returns
+    // the previous reference, `initial` never changes identity, and this guard would be hollow.
     //
-    // The refetch also changes `invoiceNumber` and passenger 1's stored `remark` (not just proving
-    // *a* change happened — this forces the SAME field the test is asserting on to genuinely differ
-    // server-side). `EditBookingDialog` renders `<DialogTitle>Edit booking
-    // #{data.booking.invoiceNumber}</DialogTitle>` OUTSIDE `BookingForm` — it re-renders directly
-    // from the query data, with no form state in the way. That makes it a deterministic DOM signal
-    // that the refetched data has actually propagated into the component tree and React has
-    // flushed. `waitFor(() => expect(getBooking).toHaveBeenCalledTimes(2))` only proves the MOCK
-    // FUNCTION was invoked twice — that resolves as soon as the queryFn call happens, which is
-    // before React has committed the new data to the tree (let alone run any hypothetical reset
-    // effect reacting to it). Asserting on the Remark field right after that `waitFor` races ahead
-    // of the re-render, so a reset-on-initial-change bug could still wipe the form a tick later
-    // without this test ever seeing it. Waiting for the title to show the new invoice number is the
-    // proof the new data landed; only then is asserting "the form didn't reset" meaningful.
+    // It changes the very fields the test asserts on, and the assertion waits for the DialogTitle
+    // (rendered outside BookingForm, straight from query data) to show the new invoice number.
+    // `waitFor(getBooking called twice)` would only prove the mock ran — that resolves before React
+    // commits the data, so asserting immediately after races ahead of the re-render and a reset bug
+    // could wipe the form a tick later unseen.
     vi.mocked(bookingsApi.getBooking).mockResolvedValue({
       ...DETAIL,
       booking: { ...DETAIL.booking, invoiceNumber: '99999' },
@@ -185,7 +174,7 @@ describe('EditBookingDialog', () => {
     expect(screen.getByLabelText('Invoice number')).toHaveValue('10432');
   });
 
-  // Regression guard for CRITICAL 1: the `voided` branch used to always substitute a single
+  // Regression guard: the `voided` branch used to always substitute a single
   // id-less `{ passengerName: 'VOID', amount: 0 }` row, which — because PATCH /bookings/:id
   // treats `passengers[]` as the complete desired end state — deleted every real stored
   // passenger on the invoice the moment an existing booking was marked voided and saved.

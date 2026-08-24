@@ -58,20 +58,16 @@ function memoise<T>(load: (key: string) => Promise<T>): (key: string) => Promise
 /**
  * Matches a scanned `LAST/FIRST MIDDLE` name against the customer database.
  *
- * `GET /customers/search` substring-matches the WHOLE query string against ONE field at a time
- * (`firstName` OR `lastName` OR `middleName` — see the API's `customer.service.ts`:
- * `$or: [{firstName: regex}, {lastName: regex}, {middleName: regex}]`). A space-joined
- * "Last First Middle" query can therefore never be a substring of any single stored field — it
- * must query on ONE field the scan can genuinely substring-match. The last name is the obvious
- * choice: the one part every scanned name reliably carries. All the precision then belongs in a
- * client-side filter: each candidate's `ticketingName()` is rebuilt and compared
- * case-insensitively against the FULL scanned name (surname AND given name), so a same-surname
- * mismatch is correctly rejected rather than guessed.
+ * `GET /customers/search` substring-matches the WHOLE query against ONE field at a time, so a
+ * space-joined "Last First Middle" can never match any single stored field. The query must
+ * therefore be one field the scan reliably carries — the last name.
  *
- * A customer auto-links ONLY when exactly one candidate matches that full-name comparison —
- * there is deliberately no looser fallback (e.g. "only one raw result came back total"). A
- * unique surname is not the same as an unambiguous person, and auto-linking on surname alone
- * risks attaching a booking to the wrong customer.
+ * All the precision lives in the client-side filter: each candidate's `ticketingName()` is rebuilt
+ * and compared case-insensitively against the FULL scanned name, so a same-surname mismatch is
+ * rejected rather than guessed.
+ *
+ * Auto-links ONLY when exactly one candidate matches that full comparison. There is deliberately
+ * no looser fallback: a unique surname is not an unambiguous person.
  */
 async function resolveCustomerName(name: string): Promise<CustomerSearchResult | null> {
   const [lastNameRaw] = name.split('/');

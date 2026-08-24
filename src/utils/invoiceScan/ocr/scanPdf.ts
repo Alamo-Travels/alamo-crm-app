@@ -21,29 +21,19 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Renders every page, OCRs each in turn, then parses the whole stack into invoices.
+ * Renders every page, OCRs each in turn, then parses the stack into invoices.
  *
- * A page that fails to render or fails to OCR does not abort the batch — Tasks 3-6 are already
- * built around flagging bad reads via `ScannedInvoice.issues` and carrying on, because these
- * scans are routinely messy; a hard throw here would be a different, worse failure class that
- * discards every already-processed page (a real stack can run to 100+ pages). Instead, a failed
- * page contributes a synthetic `OcrPage` carrying only `UNREADABLE_PAGE_MARKER` as its line, and
- * its page number is recorded in `pageIssues`.
+ * A page that fails to render or OCR does not abort the batch — these scans are routinely messy
+ * and a throw would discard every page already processed. The failed page contributes a synthetic
+ * `OcrPage` carrying only `UNREADABLE_PAGE_MARKER`, and its number is recorded in `pageIssues`.
  *
- * The marker matters, not just the empty placeholder: `segmentPages` treats it as an invoice
- * boundary unconditionally (see that file), because there is no way to tell whether the failed
- * page WAS an invoice's `PAGE: 01` boundary — the OCR text that would prove it is exactly what's
- * missing. Without the marker, a failed boundary page silently folds itself (and every real page
- * after it up to the next detected boundary) into the PRECEDING invoice, and the invoice that
- * should have started there simply never appears — confirmed by an end-to-end probe: two single-
- * page invoices with the second page's render forced to fail produced ONE invoice under the
- * first's number, the second's number/PNR/passengers gone with no trace. Forcing a boundary
- * instead can at worst over-split a page that was really a mid-invoice continuation, which
- * produces an extra, visibly-flagged partial invoice rather than an invisible merge.
+ * The marker matters, not just the placeholder: `segmentPages` treats it as an invoice boundary
+ * unconditionally, because the OCR text that would prove whether it was one is exactly what is
+ * missing. Without it a failed boundary page folds itself and everything after it into the
+ * PRECEDING invoice, and the invoice starting there never appears — probe-confirmed. Over-
+ * splitting instead produces a visibly flagged partial invoice rather than an invisible merge.
  *
- * Once `parseScannedInvoices` has grouped pages into invoices, every invoice whose page range
- * covers a failed page number gets the matching `pageIssues` message appended, so the operator
- * learns a specific page could not be read rather than the whole upload silently losing data.
+ * Afterwards every invoice whose page range covers a failed page gets the matching issue appended.
  */
 export async function scanPdf(
   file: File,

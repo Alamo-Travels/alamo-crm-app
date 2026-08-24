@@ -108,7 +108,7 @@ describe('parseItinerary', () => {
     expect(parseItinerary([pageOf(1, 'FOR: A/B')]).issues).toContain('No flight segments found');
   });
 
-  // --- Fix round 1 regression tests -----------------------------------------------------
+  // --- Regression tests ------------------------------------------------------------------
 
   it('strips a clock time merged directly onto the city with no OCR gap', () => {
     const merged = [
@@ -166,7 +166,7 @@ describe('parseItinerary', () => {
   // --- Final review, I3 -------------------------------------------------------------------
   //
   // `arrDateReturn`/`arrDateFinal` are ARRIVAL dates by definition (the spec: "arrival date of the
-  // last segment whose AR city equals depCity"), and `ScannedSegment.arrDate` was added in Task 5
+  // last segment whose AR city equals depCity"), and `ScannedSegment.arrDate` was added later
   // for exactly this — but only the turnaround-gap loop ever consumed it; both candidates were
   // taken from the leg's DEPARTURE date. Invisible against every existing fixture because their
   // homebound legs all land the same calendar day they leave, so `.date === .arrDate`. A red-eye

@@ -69,7 +69,7 @@ describe('PhoneInput', () => {
     expect(screen.getByLabelText('Phone')).toHaveValue('(832)-555-1234');
   });
 
-  // The value Task 5's edit forms actually load: a bare 10-digit string straight
+  // The value the edit forms actually load: a bare 10-digit string straight
   // from the API. Pins that the component formats its INCOMING value, not just
   // what the user types — test 6 above cannot catch this, since it passes a
   // value that is already masked.

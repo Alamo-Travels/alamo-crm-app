@@ -113,29 +113,20 @@ export async function saveScannedInvoice(
 /**
  * Saves a Reissue/Refund as one adjustment per passenger, each against its own original.
  *
- * `bookingDate` and `pnr` come from the invoice header exactly as for a New invoice — both are
- * required by the model. The trip fields are optional and are sent only when present. The amount
- * is whatever the operator typed from the handwriting — a Reissue/Refund invoice has no printed
- * billing block, unlike New.
+ * `bookingDate` and `pnr` come from the header as for a New invoice; trip fields are sent only
+ * when present. The amount is whatever the operator read off the handwriting, since a
+ * Reissue/Refund has no printed billing block.
  *
- * Every passenger must already have a resolved `parentPassengerIds` slot (set by
- * `ScanAdjustmentParent`, gated by `statusFor` before Save is ever reachable) — the `!parentId`
- * check below is a belt-and-braces guard, not the primary gate.
+ * Every passenger already has a resolved parent by the time Save is reachable; the `!parentId`
+ * check is belt-and-braces.
  *
- * **Adjustments have NO duplicate-invoice 409 the way New bookings do** — nothing on the backend
- * would catch a passenger being POSTed twice. That matters here specifically because a multi-
- * passenger invoice POSTs sequentially and can fail PARTWAY: if passenger 2 of 3 throws, this
- * returns `'failed'` with passenger 1 already created — and `canAttemptSave`/the page's Save
- * button happily allow retrying a `'failed'` invoice. A naive retry restarting the loop from index
- * 0 would silently re-POST passenger 1's adjustment, double-counting it in the ledger. So: (a)
- * `invoice.adjustmentIds[index]` is checked first and that passenger is skipped entirely if
- * already set; (b) the optional `onProgress` callback fires the moment EACH passenger's POST
- * succeeds — not just once the whole loop finishes — so the caller (`InvoiceScanPage.performSave`)
- * can persist that id into state immediately, and a subsequent failure on a LATER passenger can
- * never lose an earlier success to a from-scratch retry. `onProgress` also reports the exact
- * `amount` that was posted (`ReviewInvoice.adjustmentAmounts`) — not used by the skip logic here,
- * but what lets the caller warn if the operator later edits an already-posted passenger's amount,
- * since that edit is silently NOT re-sent (see `adjustmentAmounts`'s own doc comment).
+ * ADJUSTMENTS HAVE NO DUPLICATE 409, so nothing server-side catches a double POST. A multi-
+ * passenger invoice posts sequentially and can fail partway, and a failed invoice is retryable, so
+ * a naive restart would re-post earlier successes. Two guards: an index with an existing
+ * `adjustmentIds` entry is skipped, and `onProgress` fires per passenger so the caller can persist
+ * each id immediately rather than only when the loop finishes. It also reports the posted amount,
+ * which is what lets the caller warn when an already-posted amount is edited and silently not
+ * re-sent.
  */
 export async function saveScannedAdjustment(
   invoice: ReviewInvoice,

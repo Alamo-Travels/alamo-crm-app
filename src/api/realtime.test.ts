@@ -274,7 +274,7 @@ describe('getSocket — revival after a server-initiated hangup', () => {
     expect(connect).toHaveBeenCalledTimes(6);
   });
 
-  // Finding 5: disconnectRealtime() only runs on the explicit Sign-out path, but clearSession() is
+  // disconnectRealtime() only runs on the explicit Sign-out path, but clearSession() is
   // also called by client.ts's refresh-failure branch and by sessionRestore's catch. Without this
   // seam the socket outlives a revoked session on a still-unexpired access token.
   it('disconnects when the session is cleared by anything, not just sign-out', async () => {

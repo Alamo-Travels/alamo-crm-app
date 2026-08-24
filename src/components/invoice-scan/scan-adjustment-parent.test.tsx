@@ -124,7 +124,7 @@ describe('ScanAdjustmentParent', () => {
     expect(await screen.findByText(/no original booking found/i)).toBeInTheDocument();
   });
 
-  // Critical 1a (fix round 1): the backend's `q` search is an unanchored SUBSTRING match on
+  // The backend's `q` search is an unanchored SUBSTRING match on
   // passenger name OR PNR (bookingQuery.service.ts) — a row can come back because its PNR merely
   // *contains* the queried text, or because its NAME matched, with a completely unrelated PNR.
   // Every ROW fixture above happens to carry the exact same PNR as the scanned invoice, which is
@@ -168,7 +168,7 @@ describe('ScanAdjustmentParent', () => {
     expect(screen.queryByRole('option', { name: /wrongpnr/i })).not.toBeInTheDocument();
   });
 
-  // Important (fix round 1): nothing should let the SAME original passenger be picked for two
+  // Nothing should let the SAME original passenger be picked for two
   // different scanned rows, manually any more than automatically.
   it("excludes an original passenger already picked for another row from a second row's picker", async () => {
     const TWO_PAX_ADJUSTMENT: ReviewInvoice = {
@@ -200,7 +200,7 @@ describe('ScanAdjustmentParent', () => {
     expect(await screen.findByRole('option', { name: /babu\/athira/i })).toBeInTheDocument();
   });
 
-  // Minor 3 (fix round 2): the auto-select dedupe (`claimed` tracking in the effect) had zero
+  // The auto-select dedupe (`claimed` tracking in the effect) had zero
   // direct coverage — no test ever had TWO scanned passengers with the identical OCR'd name
   // against a single candidate row. The manual `takenElsewhere` half was well pinned by the test
   // above; this proves the AUTO-select half of the same invariant independently.
@@ -228,7 +228,7 @@ describe('ScanAdjustmentParent', () => {
     expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({ parentPassengerIds: ['p1', 'p1'] }));
   });
 
-  // Important 2 (fix round 2): the original design collapsed to a read-only summary the instant
+  // The original design collapsed to a read-only summary the instant
   // every row resolved, with no way back short of re-uploading the whole PDF — a real problem
   // since this feature's entire premise is reviewing and CORRECTING OCR/matching output. A
   // misclick here silently attaches a reissue/refund to the wrong person's ledger permanently.
@@ -263,7 +263,7 @@ describe('ScanAdjustmentParent', () => {
     expect(await screen.findByText(/mhnglm — jacob\/shibin thomas — 0000249/i)).toBeInTheDocument();
   });
 
-  // Important 2's residual, explicitly called out in review: "make sure claimed/takenElsewhere
+  // Make sure claimed/takenElsewhere
   // still hold once it can [be changed]". Proves reopening ONE row via Change can never let it
   // steal an id a DIFFERENT row still holds — the dedupe invariant must survive a correction.
   it('still excludes an id another row already holds after a Change reopens a different row', async () => {
@@ -298,7 +298,7 @@ describe('ScanAdjustmentParent', () => {
     expect(await screen.findByRole('option', { name: /jacob\/shibin thomas/i })).toBeInTheDocument();
   });
 
-  // Fix round 3 — the Important finding: nothing cleared a resolved `parentPassengerIds` slot when
+  // The Important finding: nothing cleared a resolved `parentPassengerIds` slot when
   // `invoice.pnr` itself was edited (the real edit path is the PNR field in scan-invoice-detail.tsx;
   // this Harness drives the SAME prop change through the SAME onChange round trip, never hand-fed
   // parentPassengerIds directly — a hand-fed test would miss exactly the wiring at issue).
@@ -363,12 +363,12 @@ describe('ScanAdjustmentParent', () => {
       expect(await screen.findByText(/no original booking found/i)).toBeInTheDocument();
     });
 
-    // Final review, C1: fix round 3 only handled the "settled with a confirmed no-match" path. A
+    // An earlier fix only handled the "settled with a confirmed no-match" path. A
     // corrected PNR whose lookup ERRORS TERMINALLY (production's QueryClient retries 3 times, so
     // ~7s then a hard failure with nothing cached) left `data === undefined`, the effect
     // early-returned, and the stale parent id survived — `statusFor` still saw a resolved parent,
     // Save stayed enabled, and it would have POSTed the reissue against a passenger on the OLD PNR.
-    // Exactly the wrong-parent write fix round 3 exists to prevent, reached through the error path.
+    // Exactly the wrong-parent write this guards against, reached through the error path.
     it('clears a resolved parent when the corrected PNR lookup fails terminally with nothing cached', async () => {
       vi.mocked(bookings.listBookings).mockImplementation(async (params) => {
         if (params?.q === 'MHNGLM') return { bookings: [ROW], total: 1, page: 1, pageSize: 50 };

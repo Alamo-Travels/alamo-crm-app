@@ -112,7 +112,7 @@ describe('parsePassengers', () => {
     expect(parsePassengers([pageOf(1, 'nothing useful')]).issues).toContain('No passenger names found');
   });
 
-  // REAL CASE, observed in Task 1's measurement: Tesseract read Multi.pdf's `1,500.51`
+  // REAL CASE, measured: Tesseract read Multi.pdf's `1,500.51`
   // as `1,500b1%`. Garbled text must yield a `null` amount and trip the reconciliation check —
   // it must NEVER be coerced into a plausible-looking number.
   it('yields a null amount and flags the invoice when OCR garbles the figure', () => {
@@ -131,7 +131,7 @@ describe('parsePassengers', () => {
     );
   });
 
-  // Fix round 1 — Critical 1: a corrupted figure with a stray trailing digit must NOT be
+  // A corrupted figure with a stray trailing digit must NOT be
   // truncated into a shorter, plausible-looking, WRONG number.
   it('does not truncate a corrupted BILLED TO figure into a wrong number', () => {
     const truncated = [
@@ -156,7 +156,7 @@ describe('parsePassengers', () => {
     expect(parsePassengers(truncated).netCcBilling).toBeNull();
   });
 
-  // Fix round 1 — Critical 1 worst case, as reproduced in review: a truncated BILLED TO figure
+  // Worst case, reproduced: a truncated BILLED TO figure
   // that happens to equal NET CC BILLING used to sail through reconciliation with issues: [].
   it('does not let a truncated figure that matches NET CC BILLING sneak through reconciliation', () => {
     const worstCase = [
@@ -174,7 +174,7 @@ describe('parsePassengers', () => {
     );
   });
 
-  // Fix round 1 — Critical 2: a null passenger amount must be flagged even when NET CC BILLING
+  // A null passenger amount must be flagged even when NET CC BILLING
   // is ALSO unreadable, since the reconciliation check alone can't surface it in that case.
   it('flags a null passenger amount even when NET CC BILLING is also unreadable', () => {
     const bothGarbled = [
@@ -193,7 +193,7 @@ describe('parsePassengers', () => {
     );
   });
 
-  // Fix round 1 — Important 3: pin the FOR: block terminator's dropped-slash direction. If OCR
+  // Pin the FOR: block terminator's dropped-slash direction. If OCR
   // drops a continuation line's slash, the block ends there rather than guessing at a name.
   it('stops the FOR: block early when a continuation line drops its slash (OCR risk)', () => {
     const droppedSlash = [
@@ -208,7 +208,7 @@ describe('parsePassengers', () => {
     ]);
   });
 
-  // Fix round 1 — Important 3, the other direction: an indented slash-bearing line that isn't
+  // The other direction: an indented slash-bearing line that isn't
   // really a continuation name would be absorbed as a phantom passenger. Pinned so this known
   // risk is visible, not silently relied upon.
   it('would absorb indented slash-bearing text as a phantom passenger (documented risk)', () => {

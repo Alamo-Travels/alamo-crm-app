@@ -398,7 +398,7 @@ describe('ScanInvoiceDetail', () => {
   });
 });
 
-// --- Fix round 1: invoice-switch regression tests -------------------------------------------
+// --- Invoice-switch regression tests ---------------------------------------------------------
 //
 // Both prove the `key={invoice.id}` fix on `ScanPassengerRows`' call site in
 // `scan-invoice-detail.tsx`. Before that fix, `ScanInvoiceDetail` (and the `ScanPassengerRows` it

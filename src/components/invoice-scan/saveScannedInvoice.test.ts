@@ -252,7 +252,7 @@ describe('saveScannedAdjustment', () => {
     expect(bookings.createAdjustment).toHaveBeenNthCalledWith(2, 'p2', expect.objectContaining({ amount: 200 }));
   });
 
-  // Critical 2 (fix round 1): adjustments have no duplicate-invoice 409 the way New bookings do,
+  // Adjustments have no duplicate-invoice 409 the way New bookings do,
   // so nothing but the client stops a retried save from re-POSTing a passenger whose adjustment
   // already succeeded on an earlier, partially-failed attempt.
   it('does not re-post an adjustment that already succeeded on an earlier attempt', async () => {
@@ -305,7 +305,7 @@ describe('saveScannedAdjustment', () => {
     expect(outcome).toEqual({ kind: 'failed', message: 'boom' });
     // Passenger 1's success was reported even though passenger 2 subsequently failed — this is
     // what lets the caller persist it BEFORE the invoice's overall outcome is known. The reported
-    // amount (100) is passenger 1's own — fix round 2 threads this through so the page can later
+    // amount (100) is passenger 1's own — threaded through so the page can later
     // detect a stale edit (see `adjustmentAmounts`'s doc comment).
     expect(onProgress).toHaveBeenCalledTimes(1);
     expect(onProgress).toHaveBeenCalledWith(0, 'a1', 100);
